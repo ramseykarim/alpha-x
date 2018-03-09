@@ -1,4 +1,4 @@
-import alphax_utils
+import alphax_utils as utils
 import numpy as np
 import warnings
 
@@ -17,7 +17,7 @@ class Simplex:
     """
 
     def __init__(self, coord_set):
-        tuple_of_tuples = alphax_utils.tuple_map(coord_set)
+        tuple_of_tuples = utils.tuple_map(coord_set)
         self.corners = frozenset(tuple_of_tuples)
         self.volume, self.circumradius = None, None
         self.approx_center = None

@@ -1,4 +1,4 @@
-import alphax_utils
+import alphax_utils as utils
 
 
 class Edge(frozenset):
@@ -16,7 +16,7 @@ class Edge(frozenset):
         :param coord_set: iterable of coordinate pairs
         :return: the appropriate instance
         """
-        tuple_of_tuples = alphax_utils.tuple_map(coord_set)
+        tuple_of_tuples = utils.tuple_map(coord_set)
         # noinspection PyArgumentList
         return super().__new__(cls, tuple_of_tuples)
 
