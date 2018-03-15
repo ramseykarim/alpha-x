@@ -35,6 +35,8 @@ class Simplex:
             # Check for co-linear; send warning up to constructor call line
             warnings.warn("Shape appears to contain co-linear corners", category=RuntimeWarning, stacklevel=3)
             self.circumradius = np.inf
+        else:
+            self.circumradius = a * b * c / (4. * self.volume)
         # Approximate center
         self.approx_center = tuple((pa + pb + pc) / .3)
 
