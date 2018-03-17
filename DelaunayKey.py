@@ -1,5 +1,5 @@
-import Edge as Edg
-import Simplex as Sim
+import SimplexEdge as Edg
+import SimplexNode as Sim
 
 
 class DelaunayKey:
@@ -20,9 +20,9 @@ class DelaunayKey:
 
     def initialize_keys(self):
         for simplex_indices in self.delaunay.simplices:
-            simplex = Sim.Simplex([self.delaunay.points[i] for i in simplex_indices])
-            edges = [Edg.Edge([self.delaunay.points[vtx_id]
-                               for j, vtx_id in enumerate(simplex_indices) if j != i])
+            simplex = Sim.SimplexNode([self.delaunay.points[i] for i in simplex_indices])
+            edges = [Edg.SimplexEdge([self.delaunay.points[vtx_id]
+                                      for j, vtx_id in enumerate(simplex_indices) if j != i])
                      for i in range(len(simplex_indices))]
             self._sim_to_edg[simplex] = edges
             for e in edges:

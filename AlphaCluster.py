@@ -102,5 +102,3 @@ class AlphaCluster:
                 self.subclusters = old_children + self.subclusters
         self.member_range.append(0)
         return self
-
-# TODO finish this class; need to implement alpha_level capability
