@@ -23,7 +23,3 @@ class SimplexEdge(frozenset):
         # Pop without creating set. frozenset inherits iterable.
         return next(iter(self))
 
-    def get_others(self, one):
-        # TODO implement this
-        return None
-
