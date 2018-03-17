@@ -57,7 +57,6 @@ def traverse_cluster(remaining_elements):
     :param remaining_elements: set of Simplices presumably associated with this cluster.
     :return: list of disconnected clusters. Disconnected clusters are sets of Simplices.
     """
-    print(".", end="")
     cluster_list = []
     traversal_stack = set()
     while remaining_elements:
@@ -221,7 +220,7 @@ def dendrogram(alpha_root):
         if persistent:
             point_set = set()
             for t in a.cluster_elements:
-                point_set |= t.corners
+                point_set |= t
             for p in point_set:
                 points[p] = color
             hash_match_color[hash(a)] = color

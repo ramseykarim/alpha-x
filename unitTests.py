@@ -200,4 +200,32 @@ def profiler():
     cProfile.run("apy.recurse()")
 
 
+def test_simplex_node_hash():
+    a = np.array([[0, 0], [1, 0], [0, 1]], dtype=np.float64)
+    s = Simp.SimplexNode(a)
+    print(s)
+    s1 = Simp.SimplexNode(np.array([[0, 0], [1, 0]], dtype=np.float64))
+    print(s1)
+    print(s - s1)
+    e = Edg.SimplexEdge(np.array([[0, 0], [1, 0]], dtype=np.float64))
+    print(e)
+    print(hash(e))
+    print(hash(s))
+    print(hash(s1))
+    print(e == s1)
+
+
+def test_simplex_node_sort():
+    data = get_carina()[:100, :]
+    apy.QUIET = False
+    apy.ORPHAN_TOLERANCE = 150
+    apy.ALPHA_STEP = 0.97
+    apy.PERSISTENCE_THRESHOLD = 3
+    apy.MAIN_CLUSTER_THRESHOLD = 51
+    apy.initialize(data)
+    ts = apy.KEY.simplices()
+    for t in sorted(ts):
+        print(t.circumradius)
+
+
 quickrun_get_membership()
