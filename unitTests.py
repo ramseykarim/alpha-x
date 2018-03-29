@@ -1,13 +1,19 @@
 from random import seed
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.spatial import Delaunay
+from scipy.sparse.csgraph import minimum_spanning_tree as mst
+from scipy.spatial import ConvexHull
+import sys
 
 import SimplexNode as Simp
 import SimplexEdge as Edg
 import alphax_utils as apy
+import MSTCluster as mstcluster
 
 # OK color seeds: 60341 93547 1337 334442
-seed(60341)
+SEED = 60341
+seed(SEED)
 
 
 def get_carina():
@@ -146,7 +152,7 @@ def quickrun_get_membership_high_d():
     ax.invert_yaxis()
     ax = plt.subplot(121)
     for c, ps in colors.items():
-        x, y, z = zip(*ps)
+        x, y, z, w = zip(*ps)
         plt.scatter(x, y, color=c, alpha=0.8, s=1)
     ax.invert_xaxis()
     ax.set_xlabel("x")
@@ -228,4 +234,262 @@ def test_simplex_node_sort():
         print(t.circumradius)
 
 
-quickrun_get_membership()
+def prototype_circumradius(points):
+    # This ONLY "works" for an n simplex embedded in n dimensions
+    # Points MUST be of shape (n + 1, n)
+    # This does NOT work.
+    dim = points.shape[0] - 1
+    l_ij = np.zeros(dim, dtype=np.float64)
+    d = []
+    j = points[0, :]
+    p = points - j
+    j = p[0, :]
+    j2 = j.dot(j)
+    for idx in range(dim):
+        i = p[idx + 1, :]
+        i2 = i.dot(i)
+        d.append(j - i)
+        l_ij[idx] = j2 - i2
+    d = np.array(d).transpose()
+    l_ij /= 2.
+    c = np.linalg.solve(d, l_ij)
+    cj = c - j
+    return np.sqrt(cj.dot(cj))
+
+
+def test_proto_circumradius():
+    a = np.array([[0, 0], [1.5, 1], [0, 55]], dtype=np.float64)
+    print(prototype_circumradius(a))
+    print(apy.old_vr(a)[1])
+    print(apy.cayley_menger_vr(a)[1])
+    # data = get_carina()[:100, :]
+    # tri = Delaunay(data)
+    # simps, points = tri.simplices, tri.points
+    # rs = np.zeros(simps.shape[0])
+    # for i, s in enumerate(simps):
+    #     ps = points[s]
+    #     # v, r = apy.cayley_menger_vr(ps)
+    #     v, r = apy.old_vr(ps)
+    #     # r = prototype_circumradius(ps)
+    #     rs[i] = r
+    # print(rs)
+
+
+def test_mst():
+    data = get_carina()[:100, :]
+    tri = Delaunay(data)
+    csr_matrix = np.zeros((tri.points.shape[0], tri.points.shape[0]), dtype=np.float64)
+    n_indices, n_indptr = tri.vertex_neighbor_vertices
+    for i in range(tri.points.shape[0]):
+        point_i = tri.points[i, :]
+        neighbors = n_indptr[n_indices[i]:n_indices[i+1]]
+        for j in neighbors:
+            if i > j:
+                sep = point_i - tri.points[j, :]
+                sep = np.sqrt(sep.dot(sep))
+                csr_matrix[i, j] = sep
+                csr_matrix[j, i] = sep
+    # noinspection PyTypeChecker
+    min_sp_tree = mst(csr_matrix, overwrite=True).toarray()
+    plot_list = []
+    for i in range(tri.points.shape[0]):
+        x1, y1 = tri.points[i]
+        neighbors = []
+        for j in range(tri.points.shape[0]):
+            if min_sp_tree[i, j] != 0:
+                neighbors.append(tri.points[j])
+        for n in neighbors:
+            plot_list.append([[x1, n[0]], [y1, n[1]]])
+    plt.scatter(tri.points[:, 0], tri.points[:, 1], c='r')
+    for p in plot_list:
+        x, y = p
+        plt.plot(x, y, '--', color='k')
+    plt.show()
+
+
+def test_mstcluster():
+    data = get_carina()
+    mstcluster.QUIET = True
+    mstcluster.ORPHAN_TOLERANCE = 100
+    mstcluster.ALPHA_STEP = 0.97
+    mstcluster.PERSISTENCE_THRESHOLD = 3
+    mstcluster.MAIN_CLUSTER_THRESHOLD = 51
+    mstcluster.initialize(data)
+    m_cluster = mstcluster.recurse()
+    colors, color_list, recs, base_width, lim = mstcluster.dendrogram(m_cluster)
+    print()
+    lim_alpha_lo, lim_alpha_hi = lim
+    plt.figure()
+    ax = plt.subplot(122)
+    for i, r_list in enumerate(recs):
+        for r in r_list:
+            r.set_color(color_list[i])
+            ax.add_artist(r)
+    ax.set_xlim([-0.05 * base_width, 1.05 * base_width])
+    ax.set_ylim([lim_alpha_lo * .9, lim_alpha_hi * 1.1])
+    ax.set_yscale("log")
+    ax.set_xlabel("# points")
+    ax.set_ylabel("$\\alpha")
+    ax.invert_yaxis()
+    ax = plt.subplot(121)
+    for c, ps in colors.items():
+        x, y = zip(*ps)
+        plt.scatter(x, y, color=c, alpha=0.8, s=1)
+    ax.invert_xaxis()
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    plt.show()
+
+    seed(SEED)
+    # This is for AlphaCluster and should be cleaner
+    # Should easily support the MAIN_CLUSTER_THRESHOLD option
+    data = get_carina()
+    apy.QUIET = True
+    apy.ORPHAN_TOLERANCE = 100
+    apy.ALPHA_STEP = 0.97
+    apy.PERSISTENCE_THRESHOLD = 3
+    apy.MAIN_CLUSTER_THRESHOLD = 51
+    apy.initialize(data)
+    a_x = apy.recurse()
+    colors, color_list, recs, base_width, lim = apy.dendrogram(a_x)
+    lim_alpha_lo, lim_alpha_hi = lim
+    plt.figure()
+    ax = plt.subplot(122)
+    for i, r_list in enumerate(recs):
+        for r in r_list:
+            r.set_facecolor(color_list[i])
+            ax.add_artist(r)
+    ax.set_xlim([-0.05 * base_width, 1.05 * base_width])
+    ax.set_ylim([lim_alpha_lo * .9, lim_alpha_hi * 1.1])
+    ax.set_yscale("log")
+    ax.set_xlabel("# triangles")
+    ax.set_ylabel("$\\alpha$")
+    ax.invert_yaxis()
+    ax = plt.subplot(121)
+    for c, ps in colors.items():
+        x, y = zip(*ps)
+        plt.scatter(x, y, color=c, alpha=0.8, s=1)
+    ax.invert_xaxis()
+    ax.set_xlabel("RA")
+    ax.set_ylabel("Dec")
+    plt.show()
+
+
+def test_classic_mstcluster_cdf():
+    n = 100
+    data = get_carina()
+    tri = Delaunay(data)
+    cdf = mstcluster.gen_cdf(mstcluster.get_mst_edges(tri), n=n)
+    nrange = np.arange(n)
+    plt.plot(nrange, cdf)
+    #  #  fit from 0 to 12 and 60 to 100
+    fit1 = np.polyfit(nrange[:12], cdf[:12], deg=1)
+    fit2 = np.polyfit(nrange[60:], cdf[60:], deg=1)
+    commonx = (fit1[1] - fit2[1]) / (fit2[0] - fit1[0])
+    commony = fit1[0]*commonx + fit1[1]
+    apply_poly = lambda x, f: f[0]*x + f[1]
+    plt.plot(nrange[:25], apply_poly(nrange[:25], fit1))
+    plt.plot(nrange[5:], apply_poly(nrange[5:], fit2))
+    plt.plot([commonx], [commony], 'x')
+    print(commonx, commony)
+    plt.show()
+
+
+def test_classic_mstcluster_mst():
+    data = get_carina()
+    tri = Delaunay(data)
+    min_sp_tree = mstcluster.prepare_mst_simple(tri)
+    filtered_tree = mstcluster.filter_mst(min_sp_tree)
+    plot_list = []
+    color_list = []
+    for i in range(tri.points.shape[0]):
+        x1, y1 = tri.points[i]
+        neighbors = []
+        colors = []
+        for j in range(tri.points.shape[0]):
+            if filtered_tree[i, j] != 0:
+                neighbors.append(tri.points[j])
+                colors.append('r')
+            elif min_sp_tree[i, j] != 0:
+                neighbors.append(tri.points[j])
+                colors.append('b')
+        for n, c in zip(neighbors, colors):
+            plot_list.append([[x1, n[0]], [y1, n[1]]])
+            color_list.append(c)
+    # plt.scatter(tri.points[:, 0], tri.points[:, 1], c='r')
+    for p, c in zip(plot_list, color_list):
+        x, y = p
+        plt.plot(x, y, '--', color=c)
+    plt.show()
+
+
+def test_classic_mstcluster_cluster():
+    data = get_carina()
+    tri = Delaunay(data)
+    min_sp_tree = mstcluster.prepare_mst_simple(tri)
+    clusters = mstcluster.reduce_mst_clusters(min_sp_tree)
+    min_points = 30
+    plt.plot(tri.points[:, 0], tri.points[:, 1], 'k,')
+    for c in clusters:
+        if len(c) >= min_points:
+            coords = np.array([tri.points[i, :] for i in c])
+            hull = ConvexHull(coords)
+            # noinspection PyUnresolvedReferences
+            for simplex in hull.simplices:
+                plt.plot(coords[simplex, 0], coords[simplex, 1], '-', color='r', lw=1)
+    ax = plt.gca()
+    ax.invert_xaxis()
+    ax.set_xlabel("RA")
+    ax.set_ylabel("Dec")
+    plt.show()
+
+
+def test_compare_mst_alpha():
+    data = get_carina()
+    apy.QUIET = False
+    apy.ORPHAN_TOLERANCE = 100
+    apy.ALPHA_STEP = 0.97
+    apy.PERSISTENCE_THRESHOLD = 3
+    apy.MAIN_CLUSTER_THRESHOLD = 51
+    apy.initialize(data)
+    a_x = apy.recurse()
+    colors, color_list, recs, base_width, lim = apy.dendrogram(a_x)
+    lim_alpha_lo, lim_alpha_hi = lim
+    plt.figure()
+    ax_dend = plt.subplot(122)
+    for i, r_list in enumerate(recs):
+        for r in r_list:
+            r.set_facecolor(color_list[i])
+            ax_dend.add_artist(r)
+    ax_dend.set_xlim([-0.05 * base_width, 1.05 * base_width])
+    ax_dend.set_ylim([lim_alpha_lo * .9, lim_alpha_hi * 1.1])
+    ax_dend.set_yscale("log")
+    ax_dend.set_xlabel("# triangles")
+    ax_dend.set_ylabel("$\\alpha$")
+    ax_dend.invert_yaxis()
+    ax_points = plt.subplot(121)
+    for c, ps in colors.items():
+        x, y = zip(*ps)
+        plt.scatter(x, y, color=c, alpha=0.8, s=1)
+    ax_points.invert_xaxis()
+    ax_points.set_xlabel("RA")
+    ax_points.set_ylabel("Dec")
+
+    print("Halfway..")
+
+    tri = apy.KEY.delaunay
+    min_sp_tree = mstcluster.prepare_mst_simple(tri)
+    cutoff_alpha = mstcluster.get_cdf_cutoff(min_sp_tree)
+    clusters = mstcluster.reduce_mst_clusters(min_sp_tree)
+    for c in clusters:
+        if len(c) >= apy.ORPHAN_TOLERANCE/2.:
+            coords = np.array([tri.points[i, :] for i in c])
+            hull = ConvexHull(coords)
+            # noinspection PyUnresolvedReferences
+            for simplex in hull.simplices:
+                plt.plot(coords[simplex, 0], coords[simplex, 1], '-', color='r', lw=2)
+    ax_dend.plot([0, base_width], [cutoff_alpha, cutoff_alpha], '--', 'r')
+    plt.show()
+
+
+test_compare_mst_alpha()

@@ -153,7 +153,7 @@ def get_colors():
 
 def dark_color(rgb):
     r, g, b = rgb
-    return r + g + b < 450
+    return r + g + b < 400
 
 
 def rand_color(colors):
@@ -285,7 +285,7 @@ def pad_matrix(m):
 
 def euclidean_distance_matrix(point_array):
     n_points = point_array.shape[0]
-    d_matrix = np.zeros((n_points, n_points))
+    d_matrix = np.zeros((n_points, n_points), dtype=np.float64)
     for i in range(n_points):
         for j in range(n_points):
             if i == j:
