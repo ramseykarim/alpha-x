@@ -11,8 +11,8 @@ import SimplexEdge as Edg
 import alphax_utils as apy
 import MSTCluster as mstcluster
 
-# OK color seeds: 60341 93547 1337 334442
-SEED = 60341
+# OK color seeds: 60341 93547 1337 334442 332542
+SEED = 635541
 seed(SEED)
 
 
@@ -23,8 +23,15 @@ def get_carina():
 
 def get_data():
     # data = np.genfromtxt("../PyAlpha_drafting/test_data/combined1300.txt", skip_header=1)
+    data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1000_gap.txt", skip_header=1)
     # data = np.genfromtxt("../PyAlpha_drafting/test_data/plummer1000.txt", skip_header=1)[:, 5:7]
-    data = np.genfromtxt("../LearningR/s4.txt", skip_header=1)
+    # data = np.genfromtxt("../LearningR/s1.txt", skip_header=1)
+    return data
+
+
+def get_data_fancy():
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/3MC.arff", skip_header=12, usecols=[0, 1], delimiter=',')
+    data = np.genfromtxt("../PyAlpha_drafting/test_data/cluto-t5-8k.arff", skip_header=12, usecols=[0, 1], delimiter=',')
     return data
 
 
@@ -492,4 +499,60 @@ def test_compare_mst_alpha():
     plt.show()
 
 
-test_compare_mst_alpha()
+def quickrun_mean_vps():
+    data = get_data()
+    apy.QUIET = False
+    apy.ORPHAN_TOLERANCE = 200
+    apy.ALPHA_STEP = 0.97
+    apy.PERSISTENCE_THRESHOLD = 1
+    apy.MAIN_CLUSTER_THRESHOLD = 51
+    apy.initialize(data)
+    a_x = apy.recurse()
+    stack = [a_x]
+    mean_vpss = []
+    while stack:
+        a = stack.pop()
+        mean_vpss.append((a.alpha_range, a.mean_vps))
+        stack += a.subclusters
+    colors, color_list, recs, base_width, lim = apy.dendrogram(a_x)
+    lim_alpha_lo, lim_alpha_hi = lim
+    plt.figure()
+    ax = plt.subplot(223)
+    for i, r_list in enumerate(recs):
+        for r in r_list:
+            r.set_facecolor(color_list[i])
+            ax.add_artist(r)
+    ax.set_xlim([-0.05 * base_width, 1.05 * base_width])
+    ax.set_ylim([lim_alpha_lo * .9, lim_alpha_hi * 1.1])
+    ax.set_yscale("log")
+    ax.set_xlabel("# triangles")
+    ax.set_ylabel("$\\alpha$")
+    ax.invert_yaxis()
+    ax = plt.subplot(221)
+    for c, ps in colors.items():
+        x, y = zip(*ps)
+        plt.scatter(x, y, color=c, alpha=0.8, s=1)
+    # ax.invert_xaxis()
+    ax.invert_yaxis()
+    # ax.set_xlabel("RA")
+    # ax.set_ylabel("Dec")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax = plt.subplot(122)
+    print()
+    coeff = (1 + np.sin(np.pi/6))*np.cos(np.pi/6)
+    for m, c in zip(mean_vpss, color_list):
+        a_r, m_vps = m
+        normed_vps = [abs(x)/(a*a*coeff) for x, a in zip(m_vps, a_r[:-1])]
+        plt.plot(a_r[:-1], normed_vps, '-', color=c)
+    ax.set_xlabel("$\\alpha$")
+    ax.set_ylabel("Mean Volume per Simplex, normed to equilateral")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    # ax.set_xlim([lim_alpha_lo * .9, lim_alpha_hi * 1.1])
+    # ax.set_ylim([.01, 100])
+    ax.invert_xaxis()
+    plt.show()
+
+
+quickrun_mean_vps()

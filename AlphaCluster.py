@@ -29,6 +29,9 @@ class AlphaCluster:
             print(utils.SP + "<branch init_size=%d>" % len(self.cluster_elements))
             utils.SP += "|  "
         self.exhaust_cluster()
+        # FIXME there's something wrong with lengths of alpha_range and others...
+        self.mean_vps = [float(v) / n for v, n in zip(self.volume_range, self.member_range[:-1])]
+        # FIXME why is mean_vps coming out negative??
         if not utils.QUIET:
             utils.SP = utils.SP[:-3]
             print(utils.SP + "</branch persist=%d>" % len(self.alpha_range))
@@ -55,6 +58,7 @@ class AlphaCluster:
                     drop_score += 1
                 self.alpha_range.append(next_alpha)
                 if drop_score == 0:
+                    self.volume_range.append(self.volume_range[-1])
                     continue  # No need to traverse the same graph as last time
                 cluster_list = utils.traverse_cluster(set(remaining_simplices))
                 orphan_tolerance = utils.ORPHAN_TOLERANCE
@@ -63,13 +67,13 @@ class AlphaCluster:
                 if len(cluster_list) > 1:
                     coherent = False  # Several! Send below to create children
                 else:
-                    self.volume_range.append(self.volume_range[-1] - dropped_simplex_volume)
                     # There was a very confusing comment in apy_9 about the line below
                     # I have figured out what I meant:
                     # Below, we discard the dropped simplices. Maybe we want information about them!
                     # If we proceed as we do below, we lose that information forever.
                     # I think we should proceed as below and quit tracking orphaned clusters entirely.
                     if cluster_list:
+                        self.volume_range.append(sum(x.volume for x in cluster_list[0]))
                         remaining_simplices = sorted(list(cluster_list[0]))
                     else:
                         remaining_simplices = cluster_list
@@ -85,6 +89,7 @@ class AlphaCluster:
                     if len(largest_subcluster) > active_simplices * utils.MAIN_CLUSTER_THRESHOLD:
                         remaining_simplices = sorted(list(largest_subcluster))  # Still persists with children!
                         cluster_list.remove(largest_subcluster)  # Children made from remainder
+                        self.volume_range.append(sum(x.volume for x in largest_subcluster))
                     else:
                         totally_finished = True
                 else:  # Dude there HAS to be a better way to control this omg
