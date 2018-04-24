@@ -6,7 +6,6 @@ import DelaunayKey as DKey
 from matplotlib import colors as mcolors
 from numpy.linalg import det
 from scipy.misc import factorial
-import matplotlib.patches as mpatches
 from random import randrange
 import sys
 import matplotlib.pyplot as plt
@@ -55,22 +54,40 @@ def traverse_cluster(remaining_elements):
     The outer while loop runs for each disconnected cluster withing the set, while the inner while loop runs for every
         simplex in each disconnected cluster.
     :param remaining_elements: set of Simplices presumably associated with this cluster.
-    :return: list of disconnected clusters. Disconnected clusters are sets of Simplices.
+    :return: list of disconnected (clusters, boundaries) tuples.
+        Disconnected clusters are sets of SimplexNodes.
+        Boundaries are sets of SimplexEdges.
+        The sets are paired together in tuples
+        e.g. [(set(c), set(b)), (set(c), set(b)), (set(c), set(b))]
     """
-    cluster_list = []
-    traversal_stack = set()
-    while remaining_elements:
-        traversal_stack.add(remaining_elements.pop())
-        current_cluster = set()
-        while traversal_stack:
-            t = traversal_stack.pop()
-            current_cluster.add(t)
-            remaining_elements.discard(t)
+    cluster_list = []  # Holds the resulting tuples, is return value
+    traversal_stack = set()  # SimplexNode traversal stack; order doesn't matter, so set is fine
+    while remaining_elements:  # While we haven't hit every simplex
+        traversal_stack.add(remaining_elements.pop())  # Seed the stack with an element
+        current_cluster = set()  # Prepare set for all connected simplices in this cluster
+        current_bound = {}  # Counting dictionary for edges (hit 2x, contained. hit 1x, boundary!)
+        while traversal_stack:  # While the stack isn't empty
+            t = traversal_stack.pop()  # Pop off the stack (order doesn't matter)
+            current_cluster.add(t)  # Current element is definitely part of cluster so add it to set
+            remaining_elements.discard(t)  # Remove current element from remaining_elements to avoid looping
             # See apy_9 for unintelligible comments
-            traversal_stack |= set(sum([get_simplex(e) for e in get_edge(t)], [])) & remaining_elements
-        # Should traverse boundary edges here
-        cluster_list.append(current_cluster)
+            traversal_stack |= set(sum([track_get_simplex(e, current_bound)
+                                        for e in get_edge(t)], [])
+                                   ) & remaining_elements  # That's a doozy, but it makes sense
+        current_bound = {k for k, v in current_bound.items() if v == 1}  # Isolate boundary edges
+        cluster_list.append((current_cluster, current_bound))  # Append current cluster tuple to return value list
     return cluster_list
+
+
+def track_get_simplex(edge, boundary_dict):
+    """
+    Wrapper for simplex getter; calls the real getter and handles tracking
+    :param edge: Edge instance
+    :param boundary_dict: dictionary counting number of times boundary has been visited
+    :return: list of Simplex instances
+    """
+    boundary_dict[edge] = boundary_dict.get(edge, 0) + 1
+    return get_simplex(edge)
 
 
 def get_simplex(edge):
@@ -180,9 +197,6 @@ def new_patch(bottom_left_corner, width, height):
     return plt.Rectangle(bottom_left_corner, width, height,
                          facecolor='k', edgecolor=None, linewidth=0.5,
                          )
-    # return mpatches.FancyBboxPatch(bottom_left_corner, width, height,
-    #                                boxstyle=mpatches.BoxStyle("Round", pad=0.02*height)
-    #                                )
 
 
 def dendrogram(alpha_root):
@@ -343,3 +357,121 @@ def old_vr(point_array):
     else:
         circumradius = a * b * c / (4. * volume)
     return volume, circumradius
+
+
+def boundary_traverse(cluster_bound_pair):
+    """
+    Traverses all the boundaries present in this cluster
+    :param cluster_bound_pair: tuple (set(cluster simplices), set(boundary edges))
+    :return: list of boundary circuit tuples of sets and ints [(set(b1), vol), (set(b2), vol), ..]
+    """
+    # TODO we should standardize all the traversals...
+    cluster_simplices, remaining_elements = cluster_bound_pair  # Split apart pair of sets
+    boundary_list = []  # This will contain all sets of edges, one for each boundary circuit
+    min_max = []
+    traversal_stack = set()  # Traversal stack; order doesn't matter
+    while remaining_elements:
+        current_bound = set()
+        do_not_traverse = set()  # Edges that we shouldn't try to traverse
+        t = remaining_elements.pop()
+        traversal_stack.add(t)
+        while traversal_stack:
+            t = traversal_stack.pop()
+            current_bound.add(t)
+            faces = {(t - {c}): set() for c in iter(t)}
+            for f in faces:
+                for b in remaining_elements:
+                    # Check if boundary face points are a subset of the boundary points
+                    if b > f and b not in current_bound and b not in do_not_traverse:
+                        faces[f].add(b)
+                if len(faces[f]) > 1:  # There are several connecting faces; need to pick the outermost
+                    best_path = choose_path(t, faces[f], f, cluster_simplices)
+                    faces[f].remove(best_path)  # Remove the correct boundary from this set
+                    do_not_traverse |= faces[f]  # Update with leftover boundaries
+                    faces[f] = best_path  # Assign correct boundary to this face
+                elif len(faces[f]) < 1:  # We've already traversed this direction
+                    faces[f] = None
+                else:  # There was only one connecting face
+                    faces[f] = faces[f].pop()
+                if faces[f] is not None:
+                    traversal_stack.add(faces[f])
+                    remaining_elements.remove(faces[f])
+        minx = min(current_bound, key=lambda x: min(x, key=lambda y: y[0]))
+        maxx = max(current_bound, key=lambda x: max(x, key=lambda y: y[0]))
+        boundary_list.append(current_bound)
+        min_max.append((minx, maxx))
+    # outer_bound_index = min_max.index((min(min_max, key=lambda x: x[0])[0], max(min_max, key=lambda x: x[1])[1]))
+    outer_bound_index = boundary_list.index(max(boundary_list, key=lambda x: len(x)))
+    outer_bound = boundary_list.pop(outer_bound_index)
+    boundary_list.insert(0, outer_bound)  # Outer boundary should be FIRST element of list
+    # Now to traverse the gaps!
+    gap_list = [None]
+    if len(boundary_list) > 1:
+        traversal_stack = set()
+        for current_bound in boundary_list[1:]:
+            interior_simplex = set(get_simplex(set(current_bound).pop())) - cluster_simplices
+            assert len(interior_simplex) == 1
+            interior_simplex = interior_simplex.pop()
+            traversal_stack.add(interior_simplex)
+            gap_simplices = set()
+            while traversal_stack:
+                t = traversal_stack.pop()
+                gap_simplices.add(t)
+                traversal_stack |= set(
+                    sum([get_simplex(e) for e in get_edge(t) if e not in current_bound], [])
+                ) - gap_simplices
+            gap_list.append(sum([x.volume for x in gap_simplices]))
+    return_list = list(zip(boundary_list, gap_list))
+    return return_list  # Returns list of (set, int) tuples
+
+
+def describe_bound(edge, cluster_simplices):
+    bounded_simplex = set(get_simplex(edge)) & cluster_simplices
+    assert len(bounded_simplex) == 1
+    bounded_simplex = bounded_simplex.pop()
+    x = edge.centroid
+    p = x - bounded_simplex.centroid
+    e = np.array(set(edge).pop()) - x
+    pe = (p.dot(e) / e.dot(e)) * e
+    n = p - pe
+    n = n / (np.sqrt(n.dot(n)))
+    return n, x
+
+
+def centroid(coordinates):
+    return np.mean(np.array(list(map(np.array, coordinates))), axis=0)
+
+
+def choose_path(incident_edge, other_edges_set, shared_face, cluster_simplices):
+    """
+    Chooses correct traversal path in cases of degeneracy
+    :param incident_edge: SimplexEdge from which we are traversing
+    :param other_edges_set: set of SimplexEdges connected to the incident_edge
+    :param shared_face: set of coord tuples: face (n-2) at which incident_edge joins all others
+    :param cluster_simplices: set of SimplexNodes in current cluster
+    :return: ???
+    """
+    s = centroid(shared_face)  # Shared face centroid
+    n0, x0 = describe_bound(incident_edge, cluster_simplices)  # Get info for incident bound
+    e1 = x0 - s  # Prep the e1 axis analog of new basis
+    e1 = e1 / (np.sqrt(e1.dot(e1)))  # Normalize
+    e2 = n0  # Prep the e2 axis analog of new basis
+    other_edges_list = list(other_edges_set)
+    corresponding_angles = []
+    for i, oe in enumerate(other_edges_list):
+        n, x = describe_bound(oe, cluster_simplices)  # Get info for next bound
+        m = x - s  # Get m vector for this bound
+        m1, m2 = m.dot(e1), m.dot(e2)  # Project; e vectors are normalized so this should be ok
+        angle = np.arctan2(m2, m1)  # first argument is rise, second is run
+        corresponding_angles.append(angle if angle > 0 else angle + np.pi*2)  # Save angle between 0-2pi
+    # Return boundary corresponding to the minimum angle. This works for interior AND exterior boundaries
+    return other_edges_list[corresponding_angles.index(min(corresponding_angles))]
+
+
+# def gap_post_process(boundary_range):
+    """
+    Processes alpha-range list of gaps and filters for coherence
+    :param boundary_range: list of lists of (set(), volume) tuples
+        The outer list ranges through 
+    :return: 
+    """

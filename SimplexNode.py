@@ -27,6 +27,7 @@ class SimplexNode(Edge.SimplexEdge):
         :param points: numpy array of (n + 1, m) points correctly defining an n-dimensional simplex in m dimensions
         """
         self.volume, self.circumradius = utils.cayley_menger_vr(np.array(points))
+        self.centroid = np.mean(points, axis=0)
 
     def __gt__(self, other):
         try:

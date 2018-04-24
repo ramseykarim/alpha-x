@@ -4,6 +4,7 @@ import numpy as np
 from scipy.spatial import Delaunay
 from scipy.sparse.csgraph import minimum_spanning_tree as mst
 from scipy.spatial import ConvexHull
+from itertools import cycle
 import sys
 
 import SimplexNode as Simp
@@ -500,9 +501,9 @@ def test_compare_mst_alpha():
 
 
 def quickrun_mean_vps():
-    data = get_data()
+    data = get_carina()
     apy.QUIET = False
-    apy.ORPHAN_TOLERANCE = 200
+    apy.ORPHAN_TOLERANCE = 100
     apy.ALPHA_STEP = 0.97
     apy.PERSISTENCE_THRESHOLD = 1
     apy.MAIN_CLUSTER_THRESHOLD = 51
@@ -543,7 +544,7 @@ def quickrun_mean_vps():
     coeff = (1 + np.sin(np.pi/6))*np.cos(np.pi/6)
     for m, c in zip(mean_vpss, color_list):
         a_r, m_vps = m
-        normed_vps = [abs(x)/(a*a*coeff) for x, a in zip(m_vps, a_r[:-1])]
+        normed_vps = [abs(x) for x, a in zip(m_vps, a_r[:-1])]
         plt.plot(a_r[:-1], normed_vps, '-', color=c)
     ax.set_xlabel("$\\alpha$")
     ax.set_ylabel("Mean Volume per Simplex, normed to equilateral")
@@ -555,4 +556,57 @@ def quickrun_mean_vps():
     plt.show()
 
 
-quickrun_mean_vps()
+def test_boundary():
+    # This is for AlphaCluster and should be cleaner
+    # Should easily support the MAIN_CLUSTER_THRESHOLD option
+    data = get_carina()
+    apy.QUIET = False
+    apy.ORPHAN_TOLERANCE = 150
+    apy.ALPHA_STEP = .97 #0.97
+    apy.PERSISTENCE_THRESHOLD = 3
+    apy.MAIN_CLUSTER_THRESHOLD = 51
+    apy.initialize(data)
+    a_x = apy.recurse()
+    colors, color_list, recs, base_width, lim = apy.dendrogram(a_x)
+    lim_alpha_lo, lim_alpha_hi = lim
+    plt.figure()
+    ax = plt.subplot(122)
+    for i, r_list in enumerate(recs):
+        for r in r_list:
+            r.set_facecolor(color_list[i])
+            ax.add_artist(r)
+    ax.set_xlim([-0.05 * base_width, 1.05 * base_width])
+    ax.set_ylim([lim_alpha_lo * .9, lim_alpha_hi * 1.1])
+    ax.set_yscale("log")
+    ax.set_xlabel("# triangles")
+    ax.set_ylabel("$\\alpha$")
+    ax.invert_yaxis()
+    ax = plt.subplot(121)
+
+    stack = [a_x]
+    while stack:
+        a = stack.pop()
+        for b_list in a.boundary_range:
+            cool_colors = cycle(['k', 'b', 'g', 'y', 'orange', 'navy'])
+            if b_list is not None:
+                count = -1
+                for b in b_list:
+                    clr = next(cool_colors)
+                    count += 1
+                    if count < 1:
+                        continue
+                    for e in b[0]:
+                        x, y = [], []
+                        for p in e:
+                            x.append(p[0]), y.append(p[1])
+                        plt.plot(x, y, '-', color=clr)
+    for c, ps in colors.items():
+        x, y = zip(*ps)
+        plt.scatter(x, y, color=c, alpha=0.8, s=1)
+    ax.invert_xaxis()
+    ax.set_xlabel("RA")
+    ax.set_ylabel("Dec")
+    plt.show()
+
+
+quickrun_get_membership()

@@ -18,10 +18,12 @@ class SimplexEdge(frozenset):
     def __init__(self, coord_set):
         super().__init__()
         self.volume = None
+        self.centroid = None
         self.calculate(coord_set)
 
     def calculate(self, points):
         self.volume = utils.cayley_menger_volume(np.array(points))
+        self.centroid = np.mean(points, axis=0)
 
     def safe_pop(self):
         # Pop without creating set. frozenset inherits iterable.

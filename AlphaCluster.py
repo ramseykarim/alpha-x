@@ -24,6 +24,7 @@ class AlphaCluster:
             self.alpha_range = [alpha_level]
         self.volume_range = [sum([x.volume for x in cluster_elements])]
         self.member_range = [len(self.cluster_elements)]
+        self.boundary_range = []
         self.subclusters = []
         if not utils.QUIET:
             print(utils.SP + "<branch init_size=%d>" % len(self.cluster_elements))
@@ -48,6 +49,7 @@ class AlphaCluster:
         next_alpha = None
         while not totally_finished:  # I feel like we could improve this implementation...
             coherent = True
+            cluster_list, bound_list = None, None
             while remaining_simplices and coherent:
                 next_alpha = self.alpha_range[-1] * utils.ALPHA_STEP
                 dropped_simplex_volume, drop_score = 0, 0
@@ -59,10 +61,12 @@ class AlphaCluster:
                 self.alpha_range.append(next_alpha)
                 if drop_score == 0:
                     self.volume_range.append(self.volume_range[-1])
+                    self.boundary_range.append(None)
                     continue  # No need to traverse the same graph as last time
-                cluster_list = utils.traverse_cluster(set(remaining_simplices))
+                cb_list = utils.traverse_cluster(set(remaining_simplices))
                 orphan_tolerance = utils.ORPHAN_TOLERANCE
-                cluster_list = [x for x in cluster_list if len(x) > orphan_tolerance]
+                cb_list = [(c, b) for c, b in cb_list if len(c) > orphan_tolerance]
+                cluster_list, bound_list = tuple(map(list, zip(*cb_list))) if len(cb_list) > 0 else ([], [])
                 # cluster_list either has several elements, 1 element, or 0 elements
                 if len(cluster_list) > 1:
                     coherent = False  # Several! Send below to create children
@@ -73,8 +77,12 @@ class AlphaCluster:
                     # If we proceed as we do below, we lose that information forever.
                     # I think we should proceed as below and quit tracking orphaned clusters entirely.
                     if cluster_list:
-                        self.volume_range.append(sum(x.volume for x in cluster_list[0]))
-                        remaining_simplices = sorted(list(cluster_list[0]))
+                        cluster_list = cluster_list[0]
+                        bound_list = bound_list[0]
+                        self.volume_range.append(sum(x.volume for x in cluster_list))
+                        remaining_simplices = sorted(list(cluster_list))
+                        bound_list = utils.boundary_traverse((cluster_list, bound_list))
+                        self.boundary_range.append(bound_list)
                     else:
                         remaining_simplices = cluster_list
             # Just finished looping through remaining_simplices! Something stopped it.
@@ -85,11 +93,15 @@ class AlphaCluster:
             else:  # Definitely has more than 1 cluster!
                 if utils.MAIN_CLUSTER_THRESHOLD > 0:  # Possibility to make children and still persist
                     active_simplices = sum([len(sc) for sc in cluster_list])
-                    largest_subcluster = max(cluster_list, key=lambda x: len(x))
+                    largest_index = cluster_list.index(max(cluster_list, key=lambda x: len(x)))
+                    largest_subcluster = cluster_list[largest_index]  # max(cluster_list, key=lambda x: len(x))
+                    largest_bound = bound_list[largest_index]
                     if len(largest_subcluster) > active_simplices * utils.MAIN_CLUSTER_THRESHOLD:
                         remaining_simplices = sorted(list(largest_subcluster))  # Still persists with children!
                         cluster_list.remove(largest_subcluster)  # Children made from remainder
                         self.volume_range.append(sum(x.volume for x in largest_subcluster))
+                        bound_list = utils.boundary_traverse((largest_subcluster, largest_bound))
+                        self.boundary_range.append(bound_list)
                     else:
                         totally_finished = True
                 else:  # Dude there HAS to be a better way to control this omg
