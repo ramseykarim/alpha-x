@@ -1,6 +1,7 @@
 from random import seed
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Polygon
 from scipy.spatial import Delaunay
 from scipy.sparse.csgraph import minimum_spanning_tree as mst
 from scipy.spatial import ConvexHull
@@ -24,15 +25,16 @@ def get_carina():
 
 def get_data():
     # data = np.genfromtxt("../PyAlpha_drafting/test_data/combined1300.txt", skip_header=1)
-    data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1000_gap.txt", skip_header=1)
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1000_gap.txt", skip_header=1)
+    data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1200_gap.txt", skip_header=1)
     # data = np.genfromtxt("../PyAlpha_drafting/test_data/plummer1000.txt", skip_header=1)[:, 5:7]
     # data = np.genfromtxt("../LearningR/s1.txt", skip_header=1)
     return data
 
 
 def get_data_fancy():
-    # data = np.genfromtxt("../PyAlpha_drafting/test_data/3MC.arff", skip_header=12, usecols=[0, 1], delimiter=',')
-    data = np.genfromtxt("../PyAlpha_drafting/test_data/cluto-t5-8k.arff", skip_header=12, usecols=[0, 1], delimiter=',')
+    data = np.genfromtxt("../PyAlpha_drafting/test_data/3MC.arff", skip_header=12, usecols=[0, 1], delimiter=',')
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/cluto-t5-8k.arff", skip_header=12, usecols=[0, 1], delimiter=',')
     return data
 
 
@@ -559,9 +561,9 @@ def quickrun_mean_vps():
 def test_boundary():
     # This is for AlphaCluster and should be cleaner
     # Should easily support the MAIN_CLUSTER_THRESHOLD option
-    data = get_carina()
+    data = get_data()
     apy.QUIET = False
-    apy.ORPHAN_TOLERANCE = 150
+    apy.ORPHAN_TOLERANCE = 50
     apy.ALPHA_STEP = .97 #0.97
     apy.PERSISTENCE_THRESHOLD = 3
     apy.MAIN_CLUSTER_THRESHOLD = 51
@@ -570,7 +572,7 @@ def test_boundary():
     colors, color_list, recs, base_width, lim = apy.dendrogram(a_x)
     lim_alpha_lo, lim_alpha_hi = lim
     plt.figure()
-    ax = plt.subplot(122)
+    ax = plt.subplot(211)
     for i, r_list in enumerate(recs):
         for r in r_list:
             r.set_facecolor(color_list[i])
@@ -581,32 +583,38 @@ def test_boundary():
     ax.set_xlabel("# triangles")
     ax.set_ylabel("$\\alpha$")
     ax.invert_yaxis()
-    ax = plt.subplot(121)
+    ax = plt.subplot(224)
 
+    print()
     stack = [a_x]
     while stack:
         a = stack.pop()
         for b_list in a.boundary_range:
-            cool_colors = cycle(['k', 'b', 'g', 'y', 'orange', 'navy'])
-            if b_list is not None:
-                count = -1
+            if b_list and len(b_list) > 1:
+                # cool_colors = cycle(['k', 'b', 'g', 'y', 'orange', 'navy', 'cyan'])
                 for b in b_list:
-                    clr = next(cool_colors)
-                    count += 1
-                    if count < 1:
-                        continue
-                    for e in b[0]:
-                        x, y = [], []
-                        for p in e:
-                            x.append(p[0]), y.append(p[1])
-                        plt.plot(x, y, '-', color=clr)
+                    # clr = next(cool_colors)
+                    for s in b[1]:
+                        ax.add_artist(Polygon(s.coord_array(), alpha=0.1, facecolor='k', edgecolor=None))
+                        # x, y = [], []
+                        # for p in e:
+                        #     x.append(p[0]), y.append(p[1])
+                        # if clr == 'r':
+                        #     plt.plot(x, y, '--', color=clr)
+                        # else:
+                        #     plt.plot(x, y, '-', color=clr)
     for c, ps in colors.items():
         x, y = zip(*ps)
         plt.scatter(x, y, color=c, alpha=0.8, s=1)
     ax.invert_xaxis()
     ax.set_xlabel("RA")
     ax.set_ylabel("Dec")
+    ax = plt.subplot(223)
+    plt.scatter(apy.KEY.delaunay.points[:, 0], apy.KEY.delaunay.points[:, 1], color='k', alpha=0.6, s=1)
+    ax.invert_xaxis()
+    ax.set_xlabel("RA")
+    ax.set_ylabel("Dec")
     plt.show()
 
 
-quickrun_get_membership()
+test_boundary()

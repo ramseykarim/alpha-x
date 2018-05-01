@@ -32,6 +32,7 @@ class AlphaCluster:
         self.exhaust_cluster()
         # FIXME there's something wrong with lengths of alpha_range and others...
         self.mean_vps = [float(v) / n for v, n in zip(self.volume_range, self.member_range[:-1])]
+        self.boundary_range = utils.gap_post_process(self.boundary_range)
         # FIXME why is mean_vps coming out negative??
         if not utils.QUIET:
             utils.SP = utils.SP[:-3]

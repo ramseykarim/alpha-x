@@ -363,7 +363,8 @@ def boundary_traverse(cluster_bound_pair):
     """
     Traverses all the boundaries present in this cluster
     :param cluster_bound_pair: tuple (set(cluster simplices), set(boundary edges))
-    :return: list of boundary circuit tuples of sets and ints [(set(b1), vol), (set(b2), vol), ..]
+    :return: list of boundary circuit tuples of set, frozenset [(set(b0), frozenset()), (set(b1), frozenset(g1)), ..]
+        The first frozenset is EMPTY, since the outer boundary does not constitute a gap
     """
     # TODO we should standardize all the traversals...
     cluster_simplices, remaining_elements = cluster_bound_pair  # Split apart pair of sets
@@ -372,8 +373,7 @@ def boundary_traverse(cluster_bound_pair):
     traversal_stack = set()  # Traversal stack; order doesn't matter
     while remaining_elements:
         current_bound = set()
-        do_not_traverse = set()  # Edges that we shouldn't try to traverse
-        t = remaining_elements.pop()
+        t = set(remaining_elements).pop()
         traversal_stack.add(t)
         while traversal_stack:
             t = traversal_stack.pop()
@@ -381,21 +381,15 @@ def boundary_traverse(cluster_bound_pair):
             faces = {(t - {c}): set() for c in iter(t)}
             for f in faces:
                 for b in remaining_elements:
-                    # Check if boundary face points are a subset of the boundary points
-                    if b > f and b not in current_bound and b not in do_not_traverse:
+                    if b > f and b != t:
                         faces[f].add(b)
                 if len(faces[f]) > 1:  # There are several connecting faces; need to pick the outermost
                     best_path = choose_path(t, faces[f], f, cluster_simplices)
-                    faces[f].remove(best_path)  # Remove the correct boundary from this set
-                    do_not_traverse |= faces[f]  # Update with leftover boundaries
-                    faces[f] = best_path  # Assign correct boundary to this face
+                    faces[f] = {best_path}  # Assign correct boundary to this face
                 elif len(faces[f]) < 1:  # We've already traversed this direction
-                    faces[f] = None
-                else:  # There was only one connecting face
-                    faces[f] = faces[f].pop()
-                if faces[f] is not None:
-                    traversal_stack.add(faces[f])
-                    remaining_elements.remove(faces[f])
+                    faces[f] = set()
+                traversal_stack |= faces[f] - current_bound
+        remaining_elements -= current_bound
         minx = min(current_bound, key=lambda x: min(x, key=lambda y: y[0]))
         maxx = max(current_bound, key=lambda x: max(x, key=lambda y: y[0]))
         boundary_list.append(current_bound)
@@ -405,11 +399,12 @@ def boundary_traverse(cluster_bound_pair):
     outer_bound = boundary_list.pop(outer_bound_index)
     boundary_list.insert(0, outer_bound)  # Outer boundary should be FIRST element of list
     # Now to traverse the gaps!
-    gap_list = [None]
+    gap_list = [frozenset()]
     if len(boundary_list) > 1:
         traversal_stack = set()
         for current_bound in boundary_list[1:]:
-            interior_simplex = set(get_simplex(set(current_bound).pop())) - cluster_simplices
+            test_edge = set(current_bound).pop()
+            interior_simplex = set(get_simplex(test_edge)) - cluster_simplices
             assert len(interior_simplex) == 1
             interior_simplex = interior_simplex.pop()
             traversal_stack.add(interior_simplex)
@@ -420,9 +415,10 @@ def boundary_traverse(cluster_bound_pair):
                 traversal_stack |= set(
                     sum([get_simplex(e) for e in get_edge(t) if e not in current_bound], [])
                 ) - gap_simplices
-            gap_list.append(sum([x.volume for x in gap_simplices]))
+            # append the frozenSET of simplices within the gap
+            gap_list.append(frozenset(gap_simplices))
     return_list = list(zip(boundary_list, gap_list))
-    return return_list  # Returns list of (set, int) tuples
+    return return_list  # Returns list of (set, frozenset) tuples
 
 
 def describe_bound(edge, cluster_simplices):
@@ -468,10 +464,41 @@ def choose_path(incident_edge, other_edges_set, shared_face, cluster_simplices):
     return other_edges_list[corresponding_angles.index(min(corresponding_angles))]
 
 
-# def gap_post_process(boundary_range):
+def gap_post_process(boundary_range):
     """
     Processes alpha-range list of gaps and filters for coherence
-    :param boundary_range: list of lists of (set(), volume) tuples
-        The outer list ranges through 
-    :return: 
+    :param boundary_range: list of lists of (set(), frozenset()) tuples
+        The outer list ranges through alpha, inner list ranges through distinct boundaries
+        In the tuples, the sets give boundaries and the frozensets give gap simplices
+    :return: A list in the same format as the input but only with persistent gaps
     """
+    gap_key = {}  # frozenset(first_membership) : [(set(bound), frozenset(current_membership), idx), ..]
+    for i, alpha_list in enumerate(boundary_range):
+        # alpha_list is an alpha-level list of (set, frozenset) tuples
+        if alpha_list is None:
+            for k in gap_key:
+                last_bound, last_mem, last_idx = gap_key[k][-1]
+                if last_idx + 1 == i:
+                    gap_key[k].append((last_bound, last_mem, i))
+        else:
+            for j, gap_pair in enumerate(alpha_list):
+                if j == 0:
+                    # This is the outer boundary
+                    continue
+                found = False
+                bound_set, gap_set = gap_pair
+                for k in gap_key:
+                    if found:
+                        continue
+                    elif gap_set >= k:
+                        gap_key[k].append((bound_set, gap_set, i))
+                        found = True
+                if not found:
+                    gap_key[gap_set] = [(bound_set, gap_set, i)]
+    return_range = [[] for x in boundary_range]
+    for k in gap_key:
+        if len(gap_key[k]) >= 25:
+            for bound, membership, index in gap_key[k]:
+                return_range[index].append((bound, membership))
+    return return_range
+

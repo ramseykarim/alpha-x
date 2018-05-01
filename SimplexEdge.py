@@ -29,3 +29,5 @@ class SimplexEdge(frozenset):
         # Pop without creating set. frozenset inherits iterable.
         return next(iter(self))
 
+    def coord_array(self):
+        return np.array(list(map(np.array, self)))
