@@ -732,10 +732,10 @@ def speedplot(alpha_root, alpha_of_interest=None, plot_points=True):
         faces = apy.alpha_surfaces(alpha_root, alpha_of_interest)
         for f in faces:
             ax.add_collection3d(f)
-    ax.set_xlabel("$\Delta$RA off center")
-    ax.set_ylabel("$\Delta$Dec off center")
-    ax.set_zlabel("radial distance (kpc)")
-    return ax    
+    ax.set_xlabel("$\Delta$RA off center (deg)")
+    ax.set_ylabel("$\Delta$Dec off center (deg)")
+    ax.set_zlabel("radial \"angle\" (deg)")
+    return ax
 
 def quickrun_get_membership_3d():
     # This is for AlphaCluster and should be cleaner
@@ -777,15 +777,44 @@ def quickrun_get_membership_3d():
     ax.set_zlabel("radial distance (kpc)")
     plt.show()
 
+
+def scoOB_plt(ax):
+    ax.set_xlim([230, 255])
+    ax.set_ylim([-37, -11])
+    ax.set_zlim([-20, 25])
+
+
+def get_pickle(pickle_path):
+    # Super hardcoded; do not let this become a permanent function
+    with open(pickle_path, 'rb') as handle:
+        msg, apy.KEY, a_x = pickle.load(handle)
+    for s in msg.split(','):
+        prefix, number = s.split(":")
+        n = int(number) if number.isdigit() else float(number)
+        if prefix == "OT":
+            apy.ORPHAN_TOLERANCE = n
+        elif prefix == "STEP":
+            apy.ALPHA_STEP = n
+        elif prefix == "PT":
+            apy.PERSISTENCE_THRESHOLD = n
+        elif prefix == "MCT":
+            apy.MAIN_CLUSTER_THRESHOLD = n
+    return a_x
+
+scoOB_pickle_local = "../PyAlpha_drafting/test_data/ScoOB_AX.pkl"
+
 # This is for AlphaCluster and should be cleaner
 # Should easily support the MAIN_CLUSTER_THRESHOLD option
-data = get_ScoOB()[::20]
+"""
+data = get_ScoOB()
 apy.QUIET = False
-apy.ORPHAN_TOLERANCE = 100
-apy.ALPHA_STEP = 0.9
+apy.ORPHAN_TOLERANCE = 150
+apy.ALPHA_STEP = 0.97
 apy.PERSISTENCE_THRESHOLD = 1
 apy.MAIN_CLUSTER_THRESHOLD = 51
 apy.initialize(data)
 a_x = apy.recurse()
-speedplot(a_x, alpha_of_interest=0.484)
+scoOB_plt(speedplot(a_x, alpha_of_interest=0.484))
 plt.show()
+"""
+
