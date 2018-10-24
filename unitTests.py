@@ -5,8 +5,12 @@ from matplotlib.patches import Polygon
 from scipy.spatial import Delaunay
 from scipy.sparse.csgraph import minimum_spanning_tree as mst
 from scipy.spatial import ConvexHull
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from itertools import cycle
 import sys
+
+import pickle
 
 import SimplexNode as Simp
 import SimplexEdge as Edg
@@ -24,11 +28,33 @@ def get_carina():
 
 
 def get_data():
-    # data = np.genfromtxt("../PyAlpha_drafting/test_data/combined1300.txt", skip_header=1)
-    # data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1000_gap.txt", skip_header=1)
-    data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1200_gap.txt", skip_header=1)
-    # data = np.genfromtxt("../PyAlpha_drafting/test_data/plummer1000.txt", skip_header=1)[:, 5:7]
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/combined1300.txt", skip_header=1)  # Cluster-centric
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1000_gap.txt", skip_header=1)  # GT = ~25
+    data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1200_gap.txt", skip_header=1)  # GT = 25
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform600_gap_hiSN.txt", skip_header=1)  # GT = 15
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform600_gap_loSN.txt", skip_header=1)  # GT = 13
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/plummer1000.txt", skip_header=1)[:, 5:7]  # Cluster-centric
     # data = np.genfromtxt("../LearningR/s1.txt", skip_header=1)
+    return data
+
+
+def get_gaia_data():
+    data = np.genfromtxt("../PyAlpha_drafting/test_data/subset_Perseusreg1.txt")  # 3D
+    return data
+
+
+def get_data_3d():
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform600_gap_3D_empty.txt", skip_header=1)
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform600_gap_3D_hiSN.txt", skip_header=1)
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform2500_gap_3D_hiSN.txt", skip_header=1)
+    # data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1200_rings_3D.txt", skip_header=1)
+    data = np.genfromtxt("../PyAlpha_drafting/test_data/uniform1200_rings_3D_loSN.txt", skip_header=1)
+    return data
+
+
+def get_ScoOB():
+    with open("../PyAlpha_drafting/test_data/Sco-3D.pkl", 'rb') as f:
+        data = pickle.load(f)
     return data
 
 
@@ -204,12 +230,13 @@ def test_edge():
 
 
 def profiler():
-    data = get_carina()[:350, :]
+    data = get_carina()
     apy.QUIET = False
     apy.ORPHAN_TOLERANCE = 150
-    apy.ALPHA_STEP = 0.9
+    apy.ALPHA_STEP = 0.95
     apy.PERSISTENCE_THRESHOLD = 3
     apy.MAIN_CLUSTER_THRESHOLD = 51
+    apy.GAP_THRESHOLD = 1
     apy.initialize(data)
     import cProfile
     import re
@@ -561,18 +588,19 @@ def quickrun_mean_vps():
 def test_boundary():
     # This is for AlphaCluster and should be cleaner
     # Should easily support the MAIN_CLUSTER_THRESHOLD option
-    data = get_data()
+    data = get_carina()
     apy.QUIET = False
-    apy.ORPHAN_TOLERANCE = 50
+    apy.ORPHAN_TOLERANCE = 150
     apy.ALPHA_STEP = .97 #0.97
-    apy.PERSISTENCE_THRESHOLD = 3
+    apy.PERSISTENCE_THRESHOLD = 1
+    apy.GAP_THRESHOLD = 15
     apy.MAIN_CLUSTER_THRESHOLD = 51
     apy.initialize(data)
     a_x = apy.recurse()
     colors, color_list, recs, base_width, lim = apy.dendrogram(a_x)
     lim_alpha_lo, lim_alpha_hi = lim
     plt.figure()
-    ax = plt.subplot(211)
+    ax = plt.subplot2grid((6, 6), (3, 4), colspan=2, rowspan=3)
     for i, r_list in enumerate(recs):
         for r in r_list:
             r.set_facecolor(color_list[i])
@@ -583,7 +611,7 @@ def test_boundary():
     ax.set_xlabel("# triangles")
     ax.set_ylabel("$\\alpha$")
     ax.invert_yaxis()
-    ax = plt.subplot(224)
+    ax = plt.subplot2grid((6, 6), (0, 0), colspan=4, rowspan=5)
 
     print()
     stack = [a_x]
@@ -609,12 +637,155 @@ def test_boundary():
     ax.invert_xaxis()
     ax.set_xlabel("RA")
     ax.set_ylabel("Dec")
-    ax = plt.subplot(223)
-    plt.scatter(apy.KEY.delaunay.points[:, 0], apy.KEY.delaunay.points[:, 1], color='k', alpha=0.6, s=1)
-    ax.invert_xaxis()
-    ax.set_xlabel("RA")
-    ax.set_ylabel("Dec")
+    # ax = plt.subplot(223)
+    # plt.scatter(apy.KEY.delaunay.points[:, 0], apy.KEY.delaunay.points[:, 1], color='k', alpha=0.6, s=1)
+    # ax.invert_xaxis()
+    # ax.set_xlabel("RA")
+    # ax.set_ylabel("Dec")
     plt.show()
 
 
-test_boundary()
+def test_boundary_3d():
+    # This is for AlphaCluster and should be cleaner
+    # Should easily support the MAIN_CLUSTER_THRESHOLD option
+    data = get_gaia_data()
+    apy.QUIET = False
+    apy.ORPHAN_TOLERANCE = 50
+    apy.ALPHA_STEP = .97
+    apy.PERSISTENCE_THRESHOLD = 3
+    apy.GAP_THRESHOLD = 1
+    apy.MAIN_CLUSTER_THRESHOLD = 51
+    apy.initialize(data)
+    a_x = apy.recurse()
+    colors, color_list, recs, base_width, lim = apy.dendrogram(a_x)
+    lim_alpha_lo, lim_alpha_hi = lim
+    plt.figure()
+    ax = plt.subplot2grid((2, 4), (1, 3))
+    for i, r_list in enumerate(recs):
+        for r in r_list:
+            r.set_facecolor(color_list[i])
+            ax.add_artist(r)
+    ax.set_xlim([-0.05 * base_width, 1.05 * base_width])
+    ax.set_ylim([lim_alpha_lo * .9, lim_alpha_hi * 1.1])
+    ax.set_yscale("log")
+    ax.set_xlabel("# triangles")
+    ax.set_ylabel("$\\alpha$")
+    ax.invert_yaxis()
+    ax = plt.subplot2grid((2, 4), (0, 0), colspan=3, rowspan=2, projection='3d')
+    print()
+    stack = [a_x]
+    while stack:
+        a = stack.pop()
+        for i, b_list in enumerate(a.boundary_range):
+            if a.alpha_range[i] > 2.1:
+                continue
+            # We used to check if len(b_list) > 1 but I think that's counterproductive
+            # b_list is the list of gap (set(), frozenset()) tuples for a given alpha
+            if b_list:
+                for b in b_list:
+                    # b is a tuple of (set(), frozenset())
+                    # it represents a given gap at a given alpha
+                    # the set (index 0) gives the boundary edges (SimplexEdge)
+                    # the frozenset (index 1) gives the boundary volume elements (SimplexNode)
+                    verts = []
+                    for s in b[0]:
+                        # add triangles to triangulation
+                        verts.append(s.coord_array())
+                    tri = Poly3DCollection(verts, linewidths=1)
+                    tri.set_alpha(0.2)
+                    tri.set_facecolor('k')
+                    tri.set_edgecolor('k')
+                    ax.add_collection3d(tri)
+        stack += a.subclusters
+    for c, ps in colors.items():
+        x, y, z = zip(*ps)
+        plt.plot(x, y, zs=z, marker='.', color=c, alpha=0.8, linestyle='None')
+    ax.invert_xaxis()
+    ax.set_zlim([290, 310])
+    ax.set_xlabel("$\Delta$RA off center")
+    ax.set_ylabel("$\Delta$Dec off center")
+    ax.set_zlabel("radial distance (kpc)")
+    plt.show()
+
+def speedplot(alpha_root, alpha_of_interest=None, plot_points=True):
+    colors, color_list, recs, base_width, lim = apy.dendrogram(alpha_root)
+    lim_alpha_lo, lim_alpha_hi = lim
+    plt.figure()
+    ax = plt.subplot2grid((2, 4), (1, 3))
+    for i, r_list in enumerate(recs):
+        for r in r_list:
+            r.set_facecolor(color_list[i])
+            ax.add_artist(r)
+    ax.set_xlim([-0.05 * base_width, 1.05 * base_width])
+    ax.set_ylim([lim_alpha_lo * .9, lim_alpha_hi * 1.1])
+    ax.set_yscale("log")
+    ax.set_xlabel("# triangles")
+    ax.set_ylabel("$\\alpha$")
+    ax.invert_yaxis()
+    ax = plt.subplot2grid((2, 4), (0, 0), colspan=3, rowspan=2, projection='3d')
+    print()
+    if plot_points:
+        for c, ps in colors.items():
+            x, y, z = zip(*ps)
+            ax.plot(x, y, zs=z, marker='.', color=c, alpha=0.8, linestyle='None', markersize=1)
+    if alpha_of_interest is not None:
+        faces = apy.alpha_surfaces(alpha_root, alpha_of_interest)
+        for f in faces:
+            ax.add_collection3d(f)
+    ax.set_xlabel("$\Delta$RA off center")
+    ax.set_ylabel("$\Delta$Dec off center")
+    ax.set_zlabel("radial distance (kpc)")
+    return ax    
+
+def quickrun_get_membership_3d():
+    # This is for AlphaCluster and should be cleaner
+    # Should easily support the MAIN_CLUSTER_THRESHOLD option
+    data = get_ScoOB()
+    apy.QUIET = False
+    apy.ORPHAN_TOLERANCE = 150
+    apy.ALPHA_STEP = 0.97
+    apy.PERSISTENCE_THRESHOLD = 3
+    apy.MAIN_CLUSTER_THRESHOLD = 51
+    apy.initialize(data)
+    a_x = apy.recurse()
+    colors, color_list, recs, base_width, lim = apy.dendrogram(a_x)
+    lim_alpha_lo, lim_alpha_hi = lim
+
+    plt.figure()
+    ax = plt.subplot2grid((2, 4), (1, 3))
+    for i, r_list in enumerate(recs):
+        for r in r_list:
+            r.set_facecolor(color_list[i])
+            ax.add_artist(r)
+    ax.set_xlim([-0.05 * base_width, 1.05 * base_width])
+    ax.set_ylim([lim_alpha_lo * .9, lim_alpha_hi * 1.1])
+    ax.set_yscale("log")
+    ax.set_xlabel("# triangles")
+    ax.set_ylabel("$\\alpha$")
+    ax.invert_yaxis()
+    ax = plt.subplot2grid((2, 4), (0, 0), colspan=3, rowspan=2, projection='3d')
+    print()
+    for c, ps in colors.items():
+        x, y, z = zip(*ps)
+        ax.plot(x, y, zs=z, marker='.', color=c, alpha=0.8, linestyle='None', markersize=1)
+    # alpha_of_interest = 0.484 #a_x.alpha_range[int(len(a_x.alpha_range)/2)]
+    # faces = apy.alpha_surfaces(a_x, alpha_of_interest)
+    # for f in faces:
+    #     ax.add_collection3d(f)
+    ax.set_xlabel("$\Delta$RA off center")
+    ax.set_ylabel("$\Delta$Dec off center")
+    ax.set_zlabel("radial distance (kpc)")
+    plt.show()
+
+# This is for AlphaCluster and should be cleaner
+# Should easily support the MAIN_CLUSTER_THRESHOLD option
+data = get_ScoOB()[::20]
+apy.QUIET = False
+apy.ORPHAN_TOLERANCE = 100
+apy.ALPHA_STEP = 0.9
+apy.PERSISTENCE_THRESHOLD = 1
+apy.MAIN_CLUSTER_THRESHOLD = 51
+apy.initialize(data)
+a_x = apy.recurse()
+speedplot(a_x, alpha_of_interest=0.484)
+plt.show()

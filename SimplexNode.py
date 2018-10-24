@@ -31,7 +31,7 @@ class SimplexNode(Edge.SimplexEdge):
 
     def __gt__(self, other):
         try:
-            return self.circumradius > other.sort_value
+            return self.circumradius > other.circumradius
         except AttributeError:
             return False
 

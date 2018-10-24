@@ -32,11 +32,13 @@ class AlphaCluster:
         self.exhaust_cluster()
         # FIXME there's something wrong with lengths of alpha_range and others...
         self.mean_vps = [float(v) / n for v, n in zip(self.volume_range, self.member_range[:-1])]
-        self.boundary_range = utils.gap_post_process(self.boundary_range)
         # FIXME why is mean_vps coming out negative??
         if not utils.QUIET:
             utils.SP = utils.SP[:-3]
-            print(utils.SP + "</branch persist=%d>" % len(self.alpha_range))
+            print(utils.SP + "</branch persist=%d" % len(self.alpha_range), end="")
+        self.boundary_range = utils.gap_post_process(self.boundary_range)
+        if not utils.QUIET:
+            print(">")
 
     def exhaust_cluster(self):
         """
@@ -78,6 +80,7 @@ class AlphaCluster:
                     # If we proceed as we do below, we lose that information forever.
                     # I think we should proceed as below and quit tracking orphaned clusters entirely.
                     if cluster_list:
+                        # Case in which there is only 1 list element; only 1 cluster at this point
                         cluster_list = cluster_list[0]
                         bound_list = bound_list[0]
                         self.volume_range.append(sum(x.volume for x in cluster_list))

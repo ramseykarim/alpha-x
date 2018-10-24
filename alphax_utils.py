@@ -1,4 +1,5 @@
 import numpy as np
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from scipy.spatial import Delaunay
 from collections import Iterable
 import AlphaCluster as AlphaC
@@ -14,6 +15,7 @@ DIM = 2
 ORPHAN_TOLERANCE = 0
 ALPHA_STEP = -1
 PERSISTENCE_THRESHOLD = 1
+GAP_THRESHOLD = 1
 MAIN_CLUSTER_THRESHOLD = -1
 QUIET = True
 KEY = None
@@ -291,6 +293,43 @@ def dendrogram(alpha_root):
     return colors, color_list, recs, base_width, (lim_alpha_lo, lim_alpha_hi)
 
 
+def alpha_surfaces(alpha_root, alpha):
+    plot_objects = []
+    if alpha is None:
+        stack = [sc for sc in alpha_root.subclusters]
+    else:
+        stack = [alpha_root]
+    while stack:
+        a = stack.pop()
+        cluster_elements = set(a.cluster_elements)
+        stack += a.subclusters
+        if alpha is not None:
+            if a.alpha_range[0] >= alpha > a.alpha_range[-1]:
+                cluster_elements = {s for s in cluster_elements if s.circumradius <= alpha}
+            else:
+                continue
+        cb_list = traverse_cluster(cluster_elements)
+        cb_list = [(c, b) for c, b in cb_list if len(c) > ORPHAN_TOLERANCE]
+        cluster_list, bound_list = tuple(map(list, zip(*cb_list))) if len(cb_list) > 0 else ([], [])
+
+        largest_index = cluster_list.index(max(cluster_list, key=lambda x: len(x)))
+        cluster_list = cluster_list[largest_index]
+        bound_list = bound_list[largest_index]
+
+        # cluster_list and bound_list are SETS now..
+        bound_list = boundary_traverse((cluster_list, bound_list), outer_only=True)
+        # bound_list is (still) a SET (of SimplexEdges)
+        vertices = []
+        for se in bound_list:
+            vertices.append(se.coord_array())
+        surface = Poly3DCollection(vertices, linewidths=1)
+        surface.set_alpha(0.2)
+        surface.set_facecolor('b')
+        surface.set_edgecolor('b')
+        plot_objects.append(surface)
+    return plot_objects
+
+
 def pad_matrix(m):
     m = np.pad(m, ((1, 0), (1, 0)), 'constant', constant_values=1)
     m[0, 0] = 0.
@@ -359,9 +398,10 @@ def old_vr(point_array):
     return volume, circumradius
 
 
-def boundary_traverse(cluster_bound_pair):
+def boundary_traverse(cluster_bound_pair, outer_only=False):
     """
     Traverses all the boundaries present in this cluster
+    :param outer_only: whether only the outer boundary should be returned; skips gap traversal
     :param cluster_bound_pair: tuple (set(cluster simplices), set(boundary edges))
     :return: list of boundary circuit tuples of set, frozenset [(set(b0), frozenset()), (set(b1), frozenset(g1)), ..]
         The first frozenset is EMPTY, since the outer boundary does not constitute a gap
@@ -397,6 +437,8 @@ def boundary_traverse(cluster_bound_pair):
     # outer_bound_index = min_max.index((min(min_max, key=lambda x: x[0])[0], max(min_max, key=lambda x: x[1])[1]))
     outer_bound_index = boundary_list.index(max(boundary_list, key=lambda x: len(x)))
     outer_bound = boundary_list.pop(outer_bound_index)
+    if outer_only:
+        return outer_bound
     boundary_list.insert(0, outer_bound)  # Outer boundary should be FIRST element of list
     # Now to traverse the gaps!
     gap_list = [frozenset()]
@@ -497,8 +539,10 @@ def gap_post_process(boundary_range):
                     gap_key[gap_set] = [(bound_set, gap_set, i)]
     return_range = [[] for x in boundary_range]
     for k in gap_key:
-        if len(gap_key[k]) >= 25:
+        if len(gap_key[k]) >= GAP_THRESHOLD:
             for bound, membership, index in gap_key[k]:
                 return_range[index].append((bound, membership))
+        if len(gap_key[k]) > 1:
+            print(" [%d]" % len(gap_key[k]), end="")
     return return_range
 
