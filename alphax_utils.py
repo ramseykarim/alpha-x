@@ -295,6 +295,7 @@ def dendrogram(alpha_root):
 
 def alpha_surfaces(alpha_root, alpha):
     plot_objects = []
+    colors = get_colors()
     if alpha is None:
         stack = [sc for sc in alpha_root.subclusters]
     else:
@@ -324,7 +325,7 @@ def alpha_surfaces(alpha_root, alpha):
             vertices.append(se.coord_array())
         surface = Poly3DCollection(vertices, linewidths=1)
         surface.set_alpha(0.2)
-        surface.set_facecolor('b')
+        surface.set_facecolor(rand_color(colors))
         surface.set_edgecolor('b')
         plot_objects.append(surface)
     return plot_objects
