@@ -13,7 +13,7 @@ class AlphaCluster:
     alpha range, but end implicitly at the alpha level one step past their last alpha range element.
     """
 
-    def __init__(self, cluster_elements, alpha_level=None, null_simplices=[]):
+    def __init__(self, cluster_elements, alpha_level=None, null_simplices=[], boundSA=None):
         # Cluster_elements is a set
         # Alpha level should be the alpha level at which the last cluster broke (not included in the last cluster)
 
@@ -26,12 +26,11 @@ class AlphaCluster:
         # Usage of this simplex should eliminate ambiguity in tracing this cluster in post-process
         self.tracer_simplex = None
 
-        # Sure, I guess. When would we ever use this? Why not just query it?
-        # Consider deleting. Can be done in post-process
         self.volume_range = [sum([x.volume for x in self.cluster_elements])]
-
-        # Again, when do we need this? Post-process.
-        self.member_range = [len(self.cluster_elements)]
+        ##### it's possible to get boundary SA from either KEY (root) or parent
+        self.boundSA_range = [] if boundSA is None else [boundSA] ##FIXME
+        self.nsimplex_range = [len(self.cluster_elements)]
+        self.npoint_range = [utils.npoints_from_nsimplices(self.cluster_elements)]
 
         # This is necessary; building blocks for tracing out the gap hierarchy
         self.null_simplices = [null_simplices]
@@ -141,15 +140,17 @@ class AlphaCluster:
                     # Not enough left for traversal! End it.
                     # We will do this more efficiently by putting cluster list into its own list
                     # It will fail a length check, we already know that, and it can piggyback onto the logic for "no significant children"
-                    cluster_list = [remaining_simplices]
+                    cb_list = [(remaining_simplices, set())] # the None is for the boundary
                 else:
                     # There is enough left for traversal
                     # Traverse! Assume traverse(remaining_simplices.copy()) just returns a list of FROZENsets of simplices
-                    cluster_list = utils.traverse(remaining_simplices.copy())  # This means traverse() can do whatever it wants with its argument
+                    cb_list = utils.traverse(remaining_simplices.copy())  # This means traverse() can do whatever it wants with its argument
                 # Filter cluster_list by ORPHAN_TOLERANCE
-                negligible_clusters = [cluster for cluster in cluster_list if len(cluster) < utils.ORPHAN_TOLERANCE]
-                for cluster in negligible_clusters:
+                negligible_cluster_pairs = [(c, b) for c, b in cb_list if len(c) < utils.ORPHAN_TOLERANCE]
+                cluster_list, bound_list = tuple(map(list, zip(*cb_list)))
+                for cluster, bound in negligible_clusters:
                     cluster_list.remove(cluster)
+                    bound_list.remove(bound)
                     # These are definitely within the null space. There's literally no way these are in gaps.
                     # But we add them to self._dropped_simplices anyway because the infrastructure to handle them is already there
                     remaining_simplices -= cluster
@@ -199,12 +200,8 @@ class AlphaCluster:
             # RECURSION_STACK should only contain dictionaries with these same keywords,
             # which are just the argument names of AlphaCluster.__init__()
             # Push to the stack, first-in-last-out
-            utils.RECURSION_STACK.append({
-                    utils.K_PARENT: self,
-                    utils.K_CLUSTER_ELEMENTS: cluster_set,
-                    utils.K_ALPHA_LEVEL: self._next_alpha,
-                    utils.K_NULL_SIMPLICES: subcluster_dropped_simplices[cluster_set]
-                })
+            utils.recursion_push(self, cluster_set, self._next_alpha,
+                                 subcluster_dropped_simplices[cluster_set])
             # We must not modify the elements of subcluster_list after this.
         # Return the main cluster! self._dropped_simplices is ready to go
         return set(main_cluster_set)
