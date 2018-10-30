@@ -782,7 +782,7 @@ def scoOB_plt(ax):
     ax.set_xlim([230, 255])
     ax.set_ylim([-37, -11])
     ax.set_zlim([-20, 25])
-
+    return ax
 
 def get_pickle(pickle_path):
     # Super hardcoded; do not let this become a permanent function
@@ -806,6 +806,10 @@ scoOB_pickle_local = "../PyAlpha_drafting/test_data/ScoOB_AX.pkl"
 # This is for AlphaCluster and should be cleaner
 # Should easily support the MAIN_CLUSTER_THRESHOLD option
 """
+a_x = get_pickle(scoOB_pickle_local)
+ax = scoOB_plt(speedplot(a_x, alpha_of_interest=0.484))
+
+
 data = get_ScoOB()
 apy.QUIET = False
 apy.ORPHAN_TOLERANCE = 150
