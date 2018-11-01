@@ -13,10 +13,14 @@ class AlphaCluster:
     alpha range, but end implicitly at the alpha level one step past their last alpha range element.
     """
 
-    def __init__(self, cluster_elements, alpha_level=None, null_simplices=[], boundSA=None):
+    def __init__(self, cluster_elements, parent, alpha_level=None, null_simplices=[], boundSA=None):
+        # ABOVE^^ if keyword argument defaults are never used, why have them?
+
         # Cluster_elements is a set
         # Alpha level should be the alpha level at which the last cluster broke (not included in the last cluster)
 
+        # parent pointer! useful!
+        self.parent = parent
         # A full list is an awful idea; we should just query the elements for a specific level if we need it
         # This used to be self.cluster_elements = [cluster_elements] but that's dumb, so we're changing it
         # to only store the initial list. We know the initial list is coherent at the first step
@@ -45,7 +49,7 @@ class AlphaCluster:
             self.alpha_range = [max(self.cluster_elements).circumradius]
         else:
             self.alpha_range = [alpha_level]
-
+        utils.KEY.treeIndex.append_cluster(self.alpha_range[0], self)
         if not utils.QUIET:
             print(utils.SPACE+"<branch init size(%d)>" % len(self.cluster_elements))
             utils.SPACE += "|  "
@@ -92,16 +96,13 @@ class AlphaCluster:
             # First, adjust the alpha level
             self._next_alpha *= utils.ALPHA_STEP
 
-            # Create a set for triangles dropped this round
-            self._dropped_simplices = set()
-
             # Drop everything GREATER THAN the current alpha
             # This guarantees everything left is LE(<=) the alpha level
-            largest_simplex = max(remaining_simplices) # , lambda x: x.circumradius ?
-            while len(remaining_simplices) >= utils.ORPHAN_TOLERANCE and largest_simplex.circumradius > self._next_alpha:
-                remaining_simplices.remove(largest_simplex)
-                self._dropped_simplices.add(largest_simplex)
-                largest_simplex = max(remaining_simplices) # , lambda x: x.circumradius ?
+            # Create a set for triangles dropped this round
+            self._dropped_simplices = {s for s in remaining_simplices if s.circumradius > self._next_alpha} # FIXME!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            # subtract that set from remaining_simplices
+            remaining_simplices -= self._dropped_simplices
+
 
             # Here, remaining_simplices should accurately reflect the survivors of this step
             # self._Dropped_simplices should reflect everything that belongs to a null space of some kind
@@ -191,8 +192,10 @@ class AlphaCluster:
         # could edit to be volume, number of points, etc
         main_cluster_set = max(subcluster_list, key=lambda x: len(x))
         subcluster_list.remove(main_cluster_set)
-        subcluster_dropped_simplices = {c: [] for c in subcluster_list}
+        # hash with frozenset, but c is set. unnatural.
+        subcluster_dropped_simplices = {frozenset(c): [] for c in subcluster_list}
         # Loop through a copy so we can modify the original
+        # this is sketchy -- why are we doing this?
         for simplex in self._dropped_simplices.copy():
             destination = utils.identify_null_simplex(simplex, subcluster_list)
             if destination:
@@ -203,10 +206,10 @@ class AlphaCluster:
             # which are just the argument names of AlphaCluster.__init__()
             # Push to the stack, first-in-last-out
             utils.recursion_push(self, cluster_set, self._next_alpha,
-                                 subcluster_dropped_simplices[cluster_set])
+                                 [])  # replace [] with subcluster_dropped_simplices[cluster_set]
             # We must not modify the elements of subcluster_list after this.
         # Return the main cluster! self._dropped_simplices is ready to go
-        return set(main_cluster_set)
+        return main_cluster_set
 
     def add_branch(self, child):
         self.subclusters.append(child)
@@ -225,6 +228,7 @@ class AlphaCluster:
         # The self._next_alpha is safe to append, as is self._dropped_simplices
         self.alpha_range.append(self._next_alpha)
         self.null_simplices.append(self._dropped_simplices)
+        self.nsimplex_range.append(self.nsimplex_range[-1] - len(self._dropped_simplices))
         utils.KEY.treeIndex.append_cluster(self._next_alpha, self)
 
     def cluster_at_alpha(self, alpha):
@@ -232,8 +236,8 @@ class AlphaCluster:
         assert self.alpha_range[0] >= alpha > self.alpha_range[-1]*utils.ALPHA_STEP
         valid_simplices = {s for s in self.cluster_elements if s.circumradius > alpha}
         cb_list = utils.traverse(valid_simplices)
-        cb_list = [(c, b) for c, b in cb_list if len(c) >= utils.ORPHAN_TOLERANCE]
-        cb_pair = max(cb_list, key=lambda x: len(x[0]))
+        cb_list = [(c, b) for c, b in cb_list if self.tracer_simplex in c]
+        assert len(cb_list) == 1
         cluster_list = cb_pair[0]
         bound_gap_list = utils.boundary_traverse(cb_pair)
         # Outer boundary is at index 0, with an empty set for the gap simplices

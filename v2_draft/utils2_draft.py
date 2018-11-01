@@ -2,12 +2,13 @@ import numpy as np
 from scipy.spatial import Delaunay
 from numpy.linalg import det
 from scipy.misc import factorial
-from random import randrange
+from random import seed, randrange
 import AC2_draft as AlphaC
 import DK2_draft as DKey
 import matplotlib.pyplot as plt
 from matplotlib import colors as m_colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from collections import deque
 
 ALPHA_STEP = 0.5  # Geometric, makes alpha progressively smaller
 ORPHAN_TOLERANCE = 2
@@ -16,16 +17,21 @@ SPACE = ""
 RECURSION_STACK = []
 KEY = None
 COLORS = (None, None)
+DIM = None
 
 K_PARENT = "parent"
 K_CLUSTER_ELEMENTS = "cluster_elements"
 K_ALPHA_LEVEL = "alpha_level"
 K_NULL_SIMPLICES = "null_simplices"
 
+# OK color seeds: 60341 93547 1337 334442 332542
+SEED = 635541
+seed(SEED)
 
 def initialize(points):
     global KEY
     KEY = DKey.DelaunayKey(Delaunay(points))
+    DIM = points.shape[1]
     global COLORS
     COLORS = get_colors()
 
@@ -77,15 +83,17 @@ def recurse():
     })
     while RECURSION_STACK:
         current_job = RECURSION_STACK.pop()
-        new_cluster = AlphaC.AlphaCluster(current_job[K_CLUSTER_ELEMENTS],
+        new_cluster = AlphaC.AlphaCluster(current_job[K_CLUSTER_ELEMENTS], current_job[K_PARENT],
                                           alpha_level=current_job[K_ALPHA_LEVEL],
                                           null_simplices=current_job[K_NULL_SIMPLICES])
         current_job[K_PARENT].add_branch(new_cluster)
 
-
+"""
+Traversals
+"""
 def traverse(remaining_elements):
     # remaining elements is a set of SimplexNodes
-    # this function should return a LIST of FROZENSETS of SimplexNodes
+    # this function should return a LIST of SETS of SimplexNodes
     # update this later to be exactly like the old traverse, finding boundaries
     # will also return SETS of SimplexEdges
     cluster_list = []
@@ -102,7 +110,7 @@ def traverse(remaining_elements):
                                         for e in get_edge(t)], [])
                                    ) & remaining_elements
         current_bound = {k for k, v in current_bound.items() if v == 1}
-        cluster_list.append((frozenset(current_cluster), current_bound))
+        cluster_list.append((current_cluster, current_bound))
     return cluster_list
 
 
@@ -162,7 +170,9 @@ def boundary_traverse(cluster_bound_pair, outer_only=False):
     return_list = list(zip(boundary_list, gap_list))
     return return_list  # returns list of (set, set) tuples
 
-
+"""
+Traversal helpers, math stuff
+"""
 def choose_path(incident_edge, other_edges_set, shared_face, cluster_simplices):
     s = centroid(shared_face)
     n0, x0 = describe_bound(incident_edge, cluster_simplices)
@@ -200,7 +210,9 @@ def pad_matrix(m):
     m[0, 0] = 0.
     return m
 
-
+"""
+Simplex volume, circumradius math stuff
+"""
 def euclidean_distance_matrix(point_array):
     n_points = point_array.shape[0]
     d_matrix = np.zeros((n_points, n_points), dtype=np.float64)
@@ -246,7 +258,9 @@ def cayley_menger_volume(point_array):
     cm_det_root = np.sqrt(np.abs(det(pad_matrix(euclidean_distance_matrix(point_array)))))
     return cm_volume_helper(cm_det_root, point_array.shape[0] - 1)
 
-
+"""
+Generating random colors
+"""
 def get_colors():
     colors = dict(m_colors.BASE_COLORS, **m_colors.CSS4_COLORS)
     return list(zip(*colors.items()))
@@ -269,12 +283,9 @@ def rand_color():
     return colors_keys[n]
 
 
-def new_patch(bottom_left_corner, width, height, color):
-    return plt.Rectangle(bottom_left_corner, width, height,
-                         facecolor=color, edgecolor=None, linewidth=0.5
-                         )
-
-
+"""
+Post-processing clusters
+"""
 def npoints_from_nsimplices(simplex_set):
     # simplex_set just needs to be iterable
     return set.union(*tuple(map(set, simplex_set)))
@@ -293,3 +304,102 @@ def clusters_at_alpha(alpha):
     alpha = min(all_alphas, key=lambda x: x - alpha)
     valid_shapes = {k: k.cluster_at_alpha(alpha) for k in KEY.treeIndex.alpha_range[alpha]}
     return valid_shapes
+
+"""
+Dendrogram, plotting
+"""
+def new_patch(bottom_left_corner, width, height, color):
+    return plt.Rectangle(bottom_left_corner, width, height,
+                         facecolor=color, edgecolor=None, linewidth=0.5
+                         )
+
+
+def dendrogram():
+    """
+    Generates the MATPLOTLIB patches for the dendrogram.
+    Should we enforce persistence here?
+    """
+    base_width = len(KEY.alpha_root.cluster_elements)
+    first_child = max(KEY.alpha_root.subclusters, key=lambda x: x.alpha_range[0]) if KEY.alpha_root.subclusters else KEY.alpha_root
+    lim_alpha_lo = lim_alpha_hi = first_child.alpha_range[0] / ALPHA_STEP
+    stack = deque(((KEY.alpha_root, base_width / 2),))
+    count = 0
+    patch_stack = deque()
+    while stack:
+        count += 1
+        msg = ".. %3d ../r" % count
+        # could sys.stdout.write(that)
+        a, centroid = stack.pop()
+        color = a.color
+        # Centroid at which *this* cluster should start
+        # Alpha levels at which we must branch
+        fork_alphas = [sc.alpha_range[0] for sc in a.subclusters]
+        stretching_patch_upward = False
+        start_alpha, end_alpha = None, None
+        for i, alpha in enumerate(a.alpha_range):
+            end_alpha = alpha*ALPHA_STEP
+            if not stretching_patch_upward:
+                start_alpha = alpha
+            width = a.nsimplex_range[i]
+            if (i+1 != len(a.alpha_range)) and a.nsimplex_range[i+1] == width:
+                stretching_patch_upward = True
+                continue
+            true_left_edge = centroid - width / 2
+            patch_stack.append(new_patch((true_left_edge, end_alpha), width, start_alpha - end_alpha, color))
+            stretching_patch_upward = False
+            current_fork_i = [j for j, x in enumerate(fork_alphas) if x == end_alpha]
+            # Calculate the new width and centroid of the stacks, since we're splitting off a child cluster
+            if current_fork_i:
+                current_forks = deque((a.subclusters[j], 0) for j in current_fork_i)
+                current_forks.appendleft((a, i+1))
+                total_new_width = float(sum(j.nsimplex_range[idx] for j, idx in current_forks))
+                left_edge = 0
+                for j, idx in current_forks:
+                    fractional_width = j.nsimplex_range[idx] / total_new_width
+                    new_centroid = (left_edge + fractional_width / 2) * width + true_left_edge
+                    left_edge += fractional_width
+                    if j == a:
+                        centroid = new_centroid
+                    else:
+                        stack.append((j, new_centroid))
+        if end_alpha < lim_alpha_lo:
+            # using lim_alpha_hi/lo as plot boundaries
+            lim_alpha_lo = end_alpha
+    return patch_stack, base_width, (lim_alpha_lo, lim_alpha_hi)
+
+
+def naive_point_grouping():
+    print("grouping naively..")
+    # Sort all clusters by their *end*points, smallest first
+    stack = deque(sorted(set.union(*KEY.treeIndex.alpha_range.values()), key=lambda x: x.nsimplex_range[0]))
+    print(stack)
+    point_clusters = deque()
+    used_points = set()
+    while stack:
+        a = stack.popleft()
+        points = npoints_from_nsimplices(a.cluster_elements)
+        points -= used_points
+        used_points |= points
+        print("new group of %d points" % len(points))
+        points = tuple(map(tuple, zip(*points)))
+        point_clusters.append((points, a.color))
+    return point_clusters
+
+
+def alpha_surfaces(alpha):
+    plot_surfaces = deque()
+    plot_points = deque()
+    clusters = clusters_at_alpha(alpha)
+    for a in clusters:
+        boundary, elements = clusters[a][0]
+        color = a.color
+        for b in boundary:
+            print()
+            # need to make shapes depending on dimension
+        points = tuple(map(tuple, zip(*npoints_from_nsimplices(elements))))
+        plot_points.append((points, color))
+
+
+def generate_boundary_artist(boundary):
+    # FIXME
+    return None
