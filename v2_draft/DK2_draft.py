@@ -47,6 +47,7 @@ class AlphaTreeIndex:
         # alpha range uses a float alpha value as a key
         # values are sets of alpha clusters
         self.alpha_range = {}
+        self.colors = set()
 
     def append_cluster(self, alpha, cluster):
         if alpha not in self.alpha_range:

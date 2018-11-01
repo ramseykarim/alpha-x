@@ -54,6 +54,7 @@ class AlphaCluster:
         self._dropped_simplices = None
         self._next_alpha = None
         self._coherent = True
+        self.color = utils.rand_color()
 
         # Go through and do the entire cluster traversal.
         self.exhaust_cluster()
@@ -148,7 +149,8 @@ class AlphaCluster:
                 # Filter cluster_list by ORPHAN_TOLERANCE
                 negligible_cluster_pairs = [(c, b) for c, b in cb_list if len(c) < utils.ORPHAN_TOLERANCE]
                 cluster_list, bound_list = tuple(map(list, zip(*cb_list)))
-                for cluster, bound in negligible_clusters:
+                for cluster, bound in negligible_cluster_pairs:
+                    # cluster is a frozenset, bound is a set
                     cluster_list.remove(cluster)
                     bound_list.remove(bound)
                     # These are definitely within the null space. There's literally no way these are in gaps.
@@ -156,7 +158,7 @@ class AlphaCluster:
                     remaining_simplices -= cluster
                     self._dropped_simplices |= cluster
                 # Don't need to keep all these sets around
-                del negligible_clusters
+                del negligible_cluster_pairs
                 # What's left in the cluster_list?
                 if len(cluster_list) >= 1:
                     # The main cluster continues, with or without children
@@ -225,4 +227,16 @@ class AlphaCluster:
         self.null_simplices.append(self._dropped_simplices)
         utils.KEY.treeIndex.append_cluster(self._next_alpha, self)
 
-
+    def cluster_at_alpha(self, alpha):
+        # Returns simplices and boundaries of this cluster at alpha
+        assert self.alpha_range[0] >= alpha > self.alpha_range[-1]*utils.ALPHA_STEP
+        valid_simplices = {s for s in self.cluster_elements if s.circumradius > alpha}
+        cb_list = utils.traverse(valid_simplices)
+        cb_list = [(c, b) for c, b in cb_list if len(c) >= utils.ORPHAN_TOLERANCE]
+        cb_pair = max(cb_list, key=lambda x: len(x[0]))
+        cluster_list = cb_pair[0]
+        bound_gap_list = utils.boundary_traverse(cb_pair)
+        # Outer boundary is at index 0, with an empty set for the gap simplices
+        # We'll put the cluster list as the simplex set! Useful! Be careful with that!
+        bound_gap_list.insert(0, (bound_gap_list.pop(0)[0], cluster_list))
+        return bound_gap_list

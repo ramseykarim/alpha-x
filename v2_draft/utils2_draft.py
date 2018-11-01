@@ -6,6 +6,7 @@ from random import randrange
 import AC2_draft as AlphaC
 import DK2_draft as DKey
 import matplotlib.pyplot as plt
+from matplotlib import colors as m_colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 ALPHA_STEP = 0.5  # Geometric, makes alpha progressively smaller
@@ -14,6 +15,7 @@ QUIET = False
 SPACE = ""
 RECURSION_STACK = []
 KEY = None
+COLORS = (None, None)
 
 K_PARENT = "parent"
 K_CLUSTER_ELEMENTS = "cluster_elements"
@@ -24,6 +26,8 @@ K_NULL_SIMPLICES = "null_simplices"
 def initialize(points):
     global KEY
     KEY = DKey.DelaunayKey(Delaunay(points))
+    global COLORS
+    COLORS = get_colors()
 
 
 # These things need to go to UTILS
@@ -56,10 +60,10 @@ def track_get_simplex(edge, boundary_dict):
 
 def recursion_push(parent, cluster_elements, alpha_level, null_simplices):
     RECURSION_STACK.append({
-            utils.K_PARENT: parent,
-            utils.K_CLUSTER_ELEMENTS: cluster_elements,
-            utils.K_ALPHA_LEVEL: alpha_level,
-            utils.K_NULL_SIMPLICES: null_simplices
+            K_PARENT: parent,
+            K_CLUSTER_ELEMENTS: cluster_elements,
+            K_ALPHA_LEVEL: alpha_level,
+            K_NULL_SIMPLICES: null_simplices
     })
  
 
@@ -123,7 +127,7 @@ def boundary_traverse(cluster_bound_pair, outer_only=False):
             # get all faces of this boundary (faces are like edges of edges, ie n-2 for nD)
             faces = {(t - {c}): set() for c in iter(t)}
             for f in faces:
-                for b in remaining_elements:
+                for b in remaining_edges:
                     if b>f and b!=t:
                         # b (an edge) shares this face, and is not the edge we are testing
                         faces[f].add(b)
@@ -134,6 +138,7 @@ def boundary_traverse(cluster_bound_pair, outer_only=False):
                 # (i.e. we'll pick bad paths if we remove options)
                 traversal_stack |= faces[f] - current_bound
         remaining_edges -= current_bound
+        boundary_list.append(current_bound)
     outer_bound_index = boundary_list.index(max(boundary_list, key=lambda x: len(x)))
     outer_bound = boundary_list.pop(outer_bound_index)
     if outer_only:
@@ -153,9 +158,9 @@ def boundary_traverse(cluster_bound_pair, outer_only=False):
                 traversal_stack |= set(
                     sum([get_simplex(e) for e in get_edge(t) if e not in current_bound], [])
                     ) - gap_simplices
-            gap_list.append(frozenset(gap_simplices))
+            gap_list.append(gap_simplices)
     return_list = list(zip(boundary_list, gap_list))
-    return return_list # returns list of (set, frozenset) tuples
+    return return_list  # returns list of (set, set) tuples
 
 
 def choose_path(incident_edge, other_edges_set, shared_face, cluster_simplices):
@@ -243,7 +248,7 @@ def cayley_menger_volume(point_array):
 
 
 def get_colors():
-    colors = dict(mcolors.BASE_COLORS, **mcolors.CSS4_COLORS)
+    colors = dict(m_colors.BASE_COLORS, **m_colors.CSS4_COLORS)
     return list(zip(*colors.items()))
 
 
@@ -252,14 +257,15 @@ def dark_color(rgb):
     return sum(rgb) < 400
 
 
-def rand_color(colors):
+def rand_color():
     h = (255, 255, 255)
     n = 0
-    colors_keys, colors_values = colors
-    while not dark_color(h):
+    colors_keys, colors_values = COLORS
+    while not dark_color(h) and h not in KEY.treeIndex.colors:
         n = randrange(0, len(colors_keys))
         h = colors_values[n]
         h = (int(i*255) for i in h) if isinstance(h, tuple) else tuple(int(h.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+    KEY.treeIndex.colors.add(colors_keys[n])
     return colors_keys[n]
 
 
@@ -271,5 +277,19 @@ def new_patch(bottom_left_corner, width, height, color):
 
 def npoints_from_nsimplices(simplex_set):
     # simplex_set just needs to be iterable
-    return set.union(*tuple(simplex_set))
+    return set.union(*tuple(map(set, simplex_set)))
 
+
+def clusters_at_alpha(alpha):
+    all_alphas = sorted(list(KEY.treeIndex.alpha_range.keys()), reverse=True)
+    if alpha > all_alphas[0]:
+        # all elements
+        alpha = all_alphas[0]
+    elif all_alphas[-1]*ALPHA_STEP > alpha:
+        # no elements
+        return None
+    all_alphas = [x for x in all_alphas if x >= alpha]
+    # FORCING ALPHA TO BE THE CLOSEST STEP TAKEN
+    alpha = min(all_alphas, key=lambda x: x - alpha)
+    valid_shapes = {k: k.cluster_at_alpha(alpha) for k in KEY.treeIndex.alpha_range[alpha]}
+    return valid_shapes
