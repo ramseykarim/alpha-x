@@ -8,6 +8,7 @@ import DK2_draft as DKey
 import matplotlib.pyplot as plt
 from matplotlib import colors as m_colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from matplotlib.collections import LineCollection
 from collections import deque
 
 ALPHA_STEP = 0.5  # Geometric, makes alpha progressively smaller
@@ -17,7 +18,7 @@ SPACE = ""
 RECURSION_STACK = []
 KEY = None
 COLORS = (None, None)
-DIM = None
+DIM = -1
 
 K_PARENT = "parent"
 K_CLUSTER_ELEMENTS = "cluster_elements"
@@ -28,9 +29,11 @@ K_NULL_SIMPLICES = "null_simplices"
 SEED = 635541
 seed(SEED)
 
+
 def initialize(points):
     global KEY
     KEY = DKey.DelaunayKey(Delaunay(points))
+    global DIM
     DIM = points.shape[1]
     global COLORS
     COLORS = get_colors()
@@ -66,12 +69,12 @@ def track_get_simplex(edge, boundary_dict):
 
 def recursion_push(parent, cluster_elements, alpha_level, null_simplices):
     RECURSION_STACK.append({
-            K_PARENT: parent,
-            K_CLUSTER_ELEMENTS: cluster_elements,
-            K_ALPHA_LEVEL: alpha_level,
-            K_NULL_SIMPLICES: null_simplices
+        K_PARENT: parent,
+        K_CLUSTER_ELEMENTS: cluster_elements,
+        K_ALPHA_LEVEL: alpha_level,
+        K_NULL_SIMPLICES: null_simplices
     })
- 
+
 
 def recurse():
     # does not actually recurse
@@ -88,9 +91,12 @@ def recurse():
                                           null_simplices=current_job[K_NULL_SIMPLICES])
         current_job[K_PARENT].add_branch(new_cluster)
 
+
 """
 Traversals
 """
+
+
 def traverse(remaining_elements):
     # remaining elements is a set of SimplexNodes
     # this function should return a LIST of SETS of SimplexNodes
@@ -117,7 +123,7 @@ def traverse(remaining_elements):
 def boundary_traverse(cluster_bound_pair, outer_only=False):
     # cluster_bound_pair is a tuple of sets: (set(cluster simplices), set(boundary edges))
     cluster_simplices, remaining_edges = cluster_bound_pair
-    boundary_list = [] # will contain all sets of edges, one set for each boundary circuit
+    boundary_list = []  # will contain all sets of edges, one set for each boundary circuit
     traversal_stack = set()
     # As the while loop starts:
     #  remaining_edges has all edges that we haven't yet crossed and need to
@@ -136,10 +142,10 @@ def boundary_traverse(cluster_bound_pair, outer_only=False):
             faces = {(t - {c}): set() for c in iter(t)}
             for f in faces:
                 for b in remaining_edges:
-                    if b>f and b!=t:
+                    if b > f and b != t:
                         # b (an edge) shares this face, and is not the edge we are testing
                         faces[f].add(b)
-                if len(faces[f])>1: # several connecting faces, need to pick
+                if len(faces[f]) > 1:  # several connecting faces, need to pick
                     faces[f] = {choose_path(t, faces[f], f, cluster_simplices)}
                 # update traversal_stack
                 # do not update remaining_edges! need to have a complete traversal
@@ -165,19 +171,22 @@ def boundary_traverse(cluster_bound_pair, outer_only=False):
                 gap_simplices.add(t)
                 traversal_stack |= set(
                     sum([get_simplex(e) for e in get_edge(t) if e not in current_bound], [])
-                    ) - gap_simplices
+                ) - gap_simplices
             gap_list.append(gap_simplices)
     return_list = list(zip(boundary_list, gap_list))
     return return_list  # returns list of (set, set) tuples
 
+
 """
 Traversal helpers, math stuff
 """
+
+
 def choose_path(incident_edge, other_edges_set, shared_face, cluster_simplices):
     s = centroid(shared_face)
     n0, x0 = describe_bound(incident_edge, cluster_simplices)
     e1 = x0 - s
-    e1 = e1/np.sqrt(e1.dot(e1))
+    e1 = e1 / np.sqrt(e1.dot(e1))
     e2 = n0
     other_edges_list = list(other_edges_set)
     corresponding_angles = []
@@ -186,7 +195,7 @@ def choose_path(incident_edge, other_edges_set, shared_face, cluster_simplices):
         m = x - s
         m1, m2 = m.dot(e1), m.dot(e2)
         angle = np.arctan2(m2, m1)
-        corresponding_angles.append(angle if angle>0 else angle + np.pi*2)
+        corresponding_angles.append(angle if angle > 0 else angle + np.pi * 2)
     return other_edges_list[corresponding_angles.index(min(corresponding_angles))]
 
 
@@ -201,7 +210,7 @@ def describe_bound(edge, cluster_simplices):
     e = np.array(next(iter(edge))) - x
     pe = (p.dot(e) / e.dot(e)) * e
     n = p - pe
-    n = n/np.sqrt(n.dot(n))
+    n = n / np.sqrt(n.dot(n))
     return n, x
 
 
@@ -210,9 +219,12 @@ def pad_matrix(m):
     m[0, 0] = 0.
     return m
 
+
 """
 Simplex volume, circumradius math stuff
 """
+
+
 def euclidean_distance_matrix(point_array):
     n_points = point_array.shape[0]
     d_matrix = np.zeros((n_points, n_points), dtype=np.float64)
@@ -258,9 +270,12 @@ def cayley_menger_volume(point_array):
     cm_det_root = np.sqrt(np.abs(det(pad_matrix(euclidean_distance_matrix(point_array)))))
     return cm_volume_helper(cm_det_root, point_array.shape[0] - 1)
 
+
 """
 Generating random colors
 """
+
+
 def get_colors():
     colors = dict(m_colors.BASE_COLORS, **m_colors.CSS4_COLORS)
     return list(zip(*colors.items()))
@@ -278,7 +293,8 @@ def rand_color():
     while not dark_color(h) and h not in KEY.treeIndex.colors:
         n = randrange(0, len(colors_keys))
         h = colors_values[n]
-        h = (int(i*255) for i in h) if isinstance(h, tuple) else tuple(int(h.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+        h = (int(i * 255) for i in h) if isinstance(h, tuple) else tuple(
+            int(h.lstrip('#')[i:i + 2], 16) for i in (0, 2, 4))
     KEY.treeIndex.colors.add(colors_keys[n])
     return colors_keys[n]
 
@@ -286,6 +302,8 @@ def rand_color():
 """
 Post-processing clusters
 """
+
+
 def npoints_from_nsimplices(simplex_set):
     # simplex_set just needs to be iterable
     return set.union(*tuple(map(set, simplex_set)))
@@ -296,7 +314,7 @@ def clusters_at_alpha(alpha):
     if alpha > all_alphas[0]:
         # all elements
         alpha = all_alphas[0]
-    elif all_alphas[-1]*ALPHA_STEP > alpha:
+    elif all_alphas[-1] * ALPHA_STEP > alpha:
         # no elements
         return None
     all_alphas = [x for x in all_alphas if x >= alpha]
@@ -305,9 +323,12 @@ def clusters_at_alpha(alpha):
     valid_shapes = {k: k.cluster_at_alpha(alpha) for k in KEY.treeIndex.alpha_range[alpha]}
     return valid_shapes
 
+
 """
 Dendrogram, plotting
 """
+
+
 def new_patch(bottom_left_corner, width, height, color):
     return plt.Rectangle(bottom_left_corner, width, height,
                          facecolor=color, edgecolor=None, linewidth=0.5
@@ -320,16 +341,17 @@ def dendrogram():
     Should we enforce persistence here?
     """
     base_width = len(KEY.alpha_root.cluster_elements)
-    first_child = max(KEY.alpha_root.subclusters, key=lambda x: x.alpha_range[0]) if KEY.alpha_root.subclusters else KEY.alpha_root
+    first_child = max(KEY.alpha_root.subclusters,
+                      key=lambda x: x.alpha_range[0]) if KEY.alpha_root.subclusters else KEY.alpha_root
     lim_alpha_lo = lim_alpha_hi = first_child.alpha_range[0] / ALPHA_STEP
     stack = deque(((KEY.alpha_root, base_width / 2),))
     count = 0
     patch_stack = deque()
     while stack:
         count += 1
-        msg = ".. %3d ../r" % count
+        # msg = ".. %3d ../r" % count
         # could sys.stdout.write(that)
-        a, centroid = stack.pop()
+        a, center = stack.pop()
         color = a.color
         # Centroid at which *this* cluster should start
         # Alpha levels at which we must branch
@@ -337,21 +359,21 @@ def dendrogram():
         stretching_patch_upward = False
         start_alpha, end_alpha = None, None
         for i, alpha in enumerate(a.alpha_range):
-            end_alpha = alpha*ALPHA_STEP
+            end_alpha = alpha * ALPHA_STEP
             if not stretching_patch_upward:
                 start_alpha = alpha
             width = a.nsimplex_range[i]
-            if (i+1 != len(a.alpha_range)) and a.nsimplex_range[i+1] == width:
+            if (i + 1 != len(a.alpha_range)) and a.nsimplex_range[i + 1] == width:
                 stretching_patch_upward = True
                 continue
-            true_left_edge = centroid - width / 2
+            true_left_edge = center - width / 2
             patch_stack.append(new_patch((true_left_edge, end_alpha), width, start_alpha - end_alpha, color))
             stretching_patch_upward = False
             current_fork_i = [j for j, x in enumerate(fork_alphas) if x == end_alpha]
             # Calculate the new width and centroid of the stacks, since we're splitting off a child cluster
             if current_fork_i:
                 current_forks = deque((a.subclusters[j], 0) for j in current_fork_i)
-                current_forks.appendleft((a, i+1))
+                current_forks.appendleft((a, i + 1))
                 total_new_width = float(sum(j.nsimplex_range[idx] for j, idx in current_forks))
                 left_edge = 0
                 for j, idx in current_forks:
@@ -359,7 +381,7 @@ def dendrogram():
                     new_centroid = (left_edge + fractional_width / 2) * width + true_left_edge
                     left_edge += fractional_width
                     if j == a:
-                        centroid = new_centroid
+                        center = new_centroid
                     else:
                         stack.append((j, new_centroid))
         if end_alpha < lim_alpha_lo:
@@ -369,10 +391,8 @@ def dendrogram():
 
 
 def naive_point_grouping():
-    print("grouping naively..")
     # Sort all clusters by their *end*points, smallest first
     stack = deque(sorted(set.union(*KEY.treeIndex.alpha_range.values()), key=lambda x: x.nsimplex_range[0]))
-    print(stack)
     point_clusters = deque()
     used_points = set()
     while stack:
@@ -380,8 +400,7 @@ def naive_point_grouping():
         points = npoints_from_nsimplices(a.cluster_elements)
         points -= used_points
         used_points |= points
-        print("new group of %d points" % len(points))
-        points = tuple(map(tuple, zip(*points)))
+        points = tuple(zip(*points))
         point_clusters.append((points, a.color))
     return point_clusters
 
@@ -390,16 +409,52 @@ def alpha_surfaces(alpha):
     plot_surfaces = deque()
     plot_points = deque()
     clusters = clusters_at_alpha(alpha)
+    used_points = set()
     for a in clusters:
         boundary, elements = clusters[a][0]
         color = a.color
+        vertices = deque()
         for b in boundary:
-            print()
-            # need to make shapes depending on dimension
-        points = tuple(map(tuple, zip(*npoints_from_nsimplices(elements))))
-        plot_points.append((points, color))
+            vertices.append(b.coord_array())
+        plot_surfaces.append(generate_boundary_artist(vertices, color))
+        points = npoints_from_nsimplices(elements)
+        used_points |= points
+        plot_points.append((tuple(zip(*points)), color))
+    leftovers = npoints_from_nsimplices(KEY.alpha_root.cluster_elements) - used_points
+    plot_points.append((tuple(zip(*leftovers)), 'k'))
+    return plot_surfaces, plot_points
 
 
-def generate_boundary_artist(boundary):
-    # FIXME
-    return None
+def generate_boundary_artist(vertices, color):
+    if DIM == 2:
+        artist = LineCollection(vertices)
+        artist.set_color(color)
+        artist.set_linewidth(2.5)
+    elif DIM == 3:
+        artist = Poly3DCollection(vertices, linewidths=1)
+        artist.set_facecolor(color)
+        artist.set_edgecolor('k')
+        artist.set_alpha(0.2)
+    else:
+        raise ValueError("%d dimensions needs special attention for plotting." % int(DIM))
+    return artist
+
+
+def prepare_plots(figure):
+    plt.figure(figure.number)
+    if DIM == 2:
+        dendrogram_params = ((6, 6), (3, 4))
+        main_params = ((6, 6), (0, 0))
+        d_c, d_r = 2, 3
+        m_c, m_r = 4, 5
+    elif DIM == 3:
+        dendrogram_params = ((2, 4), (1, 3))
+        main_params = ((2, 4), (0, 0))
+        d_c, d_r = 1, 1
+        m_c, m_r = 3, 1
+    else:
+        raise ValueError("%d dimensions needs special attention for plotting." % int(DIM))
+    dendrogram_ax = plt.subplot2grid(*dendrogram_params, colspan=d_c, rowspan=d_r)
+    main_ax = plt.subplot2grid(*main_params, colspan=m_c, rowspan=m_r)
+    return dendrogram_ax, main_ax
+

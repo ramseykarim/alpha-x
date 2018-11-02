@@ -99,7 +99,7 @@ class AlphaCluster:
             # Drop everything GREATER THAN the current alpha
             # This guarantees everything left is LE(<=) the alpha level
             # Create a set for triangles dropped this round
-            self._dropped_simplices = {s for s in remaining_simplices if s.circumradius > self._next_alpha} # FIXME!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            self._dropped_simplices = {s for s in remaining_simplices if s.circumradius > self._next_alpha}
             # subtract that set from remaining_simplices
             remaining_simplices -= self._dropped_simplices
 
@@ -135,7 +135,7 @@ class AlphaCluster:
             # Did we drop anything?
             if not self._dropped_simplices:
                 # We did not drop anything, just continue
-                self.continue_case()
+                self.continue_case(len(remaining_simplices))
             else:
                 # We dropped something! What's left?
                 if len(remaining_simplices) < utils.ORPHAN_TOLERANCE:
@@ -166,7 +166,7 @@ class AlphaCluster:
                     if len(cluster_list) > 1:
                         # There is at LEAST one child
                         remaining_simplices = self.spawn_subclusters(cluster_list)
-                    self.continue_case()
+                    self.continue_case(len(remaining_simplices))
                 else:
                     self.end_case()
             # At this point, unless we're about to end, we're ready to continue
@@ -223,21 +223,20 @@ class AlphaCluster:
         self._dropped_simplices = None
         self._coherent = False
 
-    def continue_case(self):
+    def continue_case(self, size):
         # This should prepare the exhaust_cluster loop to go on to the next step
         # The self._next_alpha is safe to append, as is self._dropped_simplices
         self.alpha_range.append(self._next_alpha)
         self.null_simplices.append(self._dropped_simplices)
-        self.nsimplex_range.append(self.nsimplex_range[-1] - len(self._dropped_simplices))
+        self.nsimplex_range.append(size)
         utils.KEY.treeIndex.append_cluster(self._next_alpha, self)
 
     def cluster_at_alpha(self, alpha):
         # Returns simplices and boundaries of this cluster at alpha
         assert self.alpha_range[0] >= alpha > self.alpha_range[-1]*utils.ALPHA_STEP
-        valid_simplices = {s for s in self.cluster_elements if s.circumradius > alpha}
-        cb_list = utils.traverse(valid_simplices)
-        cb_list = [(c, b) for c, b in cb_list if self.tracer_simplex in c]
-        assert len(cb_list) == 1
+        valid_simplices = {s for s in self.cluster_elements if s.circumradius <= alpha}
+        cb_pair = utils.traverse(valid_simplices)
+        cb_pair = [(c, b) for c, b in cb_pair if self.tracer_simplex in c].pop()
         cluster_list = cb_pair[0]
         bound_gap_list = utils.boundary_traverse(cb_pair)
         # Outer boundary is at index 0, with an empty set for the gap simplices
