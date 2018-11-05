@@ -805,10 +805,11 @@ scoOB_pickle_local = "../PyAlpha_drafting/test_data/ScoOB_AX.pkl"
 
 # This is for AlphaCluster and should be cleaner
 # Should easily support the MAIN_CLUSTER_THRESHOLD option
-"""
+
 a_x = get_pickle(scoOB_pickle_local)
 ax = scoOB_plt(speedplot(a_x, alpha_of_interest=0.484))
-
+plt.show()
+"""
 
 data = get_ScoOB()
 apy.QUIET = False

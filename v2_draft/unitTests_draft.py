@@ -10,16 +10,19 @@ def get_data():
 
 def get_benchmark():
     path = "../../PyAlpha_drafting/test_data/Ssets/"
-    fn = "R15.txt"
+    fn = "s1.txt"
     return np.genfromtxt(path + fn, usecols=[0, 1])
 
 
-# data = get_benchmark()
-#
-# apy.ALPHA_STEP = 0.95
-# apy.ORPHAN_TOLERANCE = 30
-# apy.initialize(data)
-# apy.recurse()
+"""
+data = get_benchmark()
+
+apy.ALPHA_STEP = 0.95
+apy.ORPHAN_TOLERANCE = 100
+apy.initialize(data)
+apy.recurse()
+"""
+
 rectangles, base_width, lim = apy.dendrogram()
 lim_alpha_lo, lim_alpha_hi = lim
 fig = plt.figure()
@@ -33,9 +36,10 @@ d_ax.set_xlabel("Relative cluster size")
 d_ax.set_ylabel("Alpha")
 d_ax.invert_yaxis()
 
-# points_list = apy.naive_point_grouping()
-
-surfaces_list, points_list = apy.alpha_surfaces(0.2)
+"""
+points_list = apy.naive_point_grouping()
+"""
+surfaces_list, points_list = apy.alpha_surfaces(12175)
 for s in surfaces_list:
     m_ax.add_artist(s)
 
