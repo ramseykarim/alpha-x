@@ -1,5 +1,5 @@
-import SE2_draft as Edg
-import SN2_draft as Sim
+import SimplexEdge as Edg
+import SimplexNode as Sim
 
 
 class DelaunayKey:

@@ -1,6 +1,6 @@
-import utils2_draft as utils
+import alphax_utils as utils
 import numpy as np
-import SE2_draft as Edge
+import SimplexEdge as Edge
 
 
 class SimplexNode(Edge.SimplexEdge):

@@ -3,8 +3,8 @@ from scipy.spatial import Delaunay
 from numpy.linalg import det
 from scipy.misc import factorial
 from random import seed, randrange
-import AC2_draft as AlphaC
-import DK2_draft as DKey
+import AlphaCluster as AlphaC
+import DelaunayKey as DKey
 import matplotlib.pyplot as plt
 from matplotlib import colors as m_colors
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
