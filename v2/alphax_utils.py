@@ -7,6 +7,7 @@ import AlphaCluster as AlphaC
 import DelaunayKey as DKey
 import matplotlib.pyplot as plt
 from matplotlib import colors as m_colors
+from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.collections import LineCollection
 from collections import deque
@@ -18,7 +19,10 @@ RECURSION_STACK = []
 KEY = None
 COLORS = (None, None)
 DIM = -1
+
 NO_CATEGORY = -99
+DEFAULT_TRANSPARENCY = 0.4
+LOW_TRANSPARENCY = 0.2
 
 K_PARENT = "parent"
 K_CLUSTER_ELEMENTS = "cluster_elements"
@@ -288,6 +292,7 @@ def dark_color(rgb):
 
 def rand_color():
     h = (255, 255, 255)
+    n = 0
     colors_keys, colors_values = COLORS
     while not dark_color(h) or h in KEY.treeIndex.colors:
         n = randrange(0, len(colors_keys))
@@ -392,16 +397,22 @@ def dendrogram():
 def naive_point_grouping():
     # Sort all clusters by their *end*points, smallest first
     stack = deque(sorted(set.union(*KEY.treeIndex.alpha_range.values()), key=lambda x: x.nsimplex_range[0]))
-    point_clusters = deque()
+    plot_surfaces = deque()
+    plot_points = deque()
     used_points = set()
     while stack:
         a = stack.popleft()
+        boundary, elements = a.cluster_at_alpha(a.alpha_range[0])[0]
+        color = a.color
+        vertices = deque()
+        for b in boundary:
+            vertices.append(b.coord_array())
+        plot_surfaces.append(generate_boundary_artist(vertices, color))
         points = npoints_from_nsimplices(a.cluster_elements)
         points -= used_points
         used_points |= points
-        points = tuple(zip(*points))
-        point_clusters.append((points, a.color))
-    return point_clusters
+        plot_points.append((tuple(zip(*points)), a.color, DEFAULT_TRANSPARENCY))
+    return plot_surfaces, plot_points
 
 
 def alpha_surfaces(alpha):
@@ -418,9 +429,9 @@ def alpha_surfaces(alpha):
         plot_surfaces.append(generate_boundary_artist(vertices, color))
         points = npoints_from_nsimplices(elements)
         used_points |= points
-        plot_points.append((tuple(zip(*points)), color))
+        plot_points.append((tuple(zip(*points)), color, DEFAULT_TRANSPARENCY))
     leftovers = npoints_from_nsimplices(KEY.alpha_root.cluster_elements) - used_points
-    plot_points.append((tuple(zip(*leftovers)), 'k'))
+    plot_points.append((tuple(zip(*leftovers)), 'gray', LOW_TRANSPARENCY))
     return plot_surfaces, plot_points
 
 
@@ -446,15 +457,17 @@ def prepare_plots(figure):
         main_params = ((6, 6), (0, 0))
         d_c, d_r = 2, 3
         m_c, m_r = 4, 5
+        projection = "rectilinear"
     elif DIM == 3:
         dendrogram_params = ((2, 4), (1, 3))
         main_params = ((2, 4), (0, 0))
         d_c, d_r = 1, 1
         m_c, m_r = 3, 1
+        projection = "3d"
     else:
         raise ValueError("%d dimensions needs special attention for plotting." % int(DIM))
     dendrogram_ax = plt.subplot2grid(*dendrogram_params, colspan=d_c, rowspan=d_r)
-    main_ax = plt.subplot2grid(*main_params, colspan=m_c, rowspan=m_r)
+    main_ax = plt.subplot2grid(*main_params, colspan=m_c, rowspan=m_r, projection=projection)
     return dendrogram_ax, main_ax
 
 
