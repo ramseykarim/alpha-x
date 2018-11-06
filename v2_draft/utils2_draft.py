@@ -11,14 +11,14 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.collections import LineCollection
 from collections import deque
 
-ALPHA_STEP = 0.5  # Geometric, makes alpha progressively smaller
-ORPHAN_TOLERANCE = 2
+
 QUIET = False
 SPACE = ""
 RECURSION_STACK = []
 KEY = None
 COLORS = (None, None)
 DIM = -1
+NO_CATEGORY = -99
 
 K_PARENT = "parent"
 K_CLUSTER_ELEMENTS = "cluster_elements"
@@ -288,15 +288,14 @@ def dark_color(rgb):
 
 def rand_color():
     h = (255, 255, 255)
-    n = 0
     colors_keys, colors_values = COLORS
-    while not dark_color(h) and h not in KEY.treeIndex.colors:
+    while not dark_color(h) or h in KEY.treeIndex.colors:
         n = randrange(0, len(colors_keys))
         h = colors_values[n]
         h = (int(i * 255) for i in h) if isinstance(h, tuple) else tuple(
             int(h.lstrip('#')[i:i + 2], 16) for i in (0, 2, 4))
-    KEY.treeIndex.colors.add(colors_keys[n])
-    return colors_keys[n]
+    KEY.treeIndex.colors.add(colors_values[n])
+    return colors_values[n]
 
 
 """
@@ -314,7 +313,7 @@ def clusters_at_alpha(alpha):
     if alpha > all_alphas[0]:
         # all elements
         alpha = all_alphas[0]
-    elif all_alphas[-1] * ALPHA_STEP > alpha:
+    elif all_alphas[-1] * KEY.alpha_step > alpha:
         # no elements
         return None
     all_alphas = [x for x in all_alphas if x >= alpha]
@@ -343,7 +342,7 @@ def dendrogram():
     base_width = len(KEY.alpha_root.cluster_elements)
     first_child = max(KEY.alpha_root.subclusters,
                       key=lambda x: x.alpha_range[0]) if KEY.alpha_root.subclusters else KEY.alpha_root
-    lim_alpha_lo = lim_alpha_hi = first_child.alpha_range[0] / ALPHA_STEP
+    lim_alpha_lo = lim_alpha_hi = first_child.alpha_range[0] / KEY.alpha_step
     stack = deque(((KEY.alpha_root, base_width / 2),))
     count = 0
     patch_stack = deque()
@@ -359,7 +358,7 @@ def dendrogram():
         stretching_patch_upward = False
         start_alpha, end_alpha = None, None
         for i, alpha in enumerate(a.alpha_range):
-            end_alpha = alpha * ALPHA_STEP
+            end_alpha = alpha * KEY.alpha_step
             if not stretching_patch_upward:
                 start_alpha = alpha
             width = a.nsimplex_range[i]
@@ -458,3 +457,71 @@ def prepare_plots(figure):
     main_ax = plt.subplot2grid(*main_params, colspan=m_c, rowspan=m_r)
     return dendrogram_ax, main_ax
 
+
+def find_membership(alpha):
+    # a certain alpha is given as a reference
+    # no membership will be assigned to clusters smaller than alpha
+    # points associated at larger alphas will be assigned to the highest child_degree possible
+    clusters = clusters_at_alpha(alpha)
+    used_points = set()
+    categories = {}
+    # First, all points in clusters AT this alpha
+    for a in clusters:
+        elements = clusters[a][0][1]
+        points = npoints_from_nsimplices(elements)
+        used_points |= points
+        categories[a] = points
+    # Now deal with leftovers (fell out before this alpha)
+    leftovers = npoints_from_nsimplices(KEY.alpha_root.cluster_elements) - used_points
+    clusters_by_deep = sorted([a for a in clusters], key=lambda x: x.get_degree(), reverse=True)
+    for a in clusters_by_deep:
+        points = npoints_from_nsimplices(a.cluster_elements)
+        points &= leftovers
+        leftovers -= points
+        categories[a] |= points
+    # There should rarely be leftovers
+    # The largest subcluster should usually persist for a while
+    # They are returned just in case
+    return categories, leftovers
+
+
+def check_answers_membership(categories, leftovers):
+    # category match contains values for each alpha cluster
+    # the values are dictionaries from the "true answer" ID to how often it occurs in this cluster
+    # the "true answer" ID that truly matches this cluster is the one that occurs most often
+    category_match = {}
+    for a in categories:
+        category_match[a] = {}
+        for p in categories[a]:
+            true_answer_identifier = KEY.true_categories[p]
+            category_match[a][true_answer_identifier] = category_match[a].get(true_answer_identifier, 0) + 1
+    # this sorts clusters by how fractionally "unified" they are
+    # i.e. percentage of all points in cluster that belong to the largest true-answer cluster within the found cluster
+    # sorted largest (most unified) to smallest (least unified)
+    largest_unified_clusters = sorted([c for c in category_match],
+                                      key=lambda x: max(category_match[x].values())/sum(category_match[x].values()),
+                                      reverse=True)
+    category_scores = {}
+    for a in largest_unified_clusters:
+        true_category = max(category_match[a], key=lambda x: category_match[a][x] if x not in category_scores else NO_CATEGORY)
+        cluster_size = sum(category_match[a].values())
+        if true_category == NO_CATEGORY:
+            category_scores[a] = (0, cluster_size)
+        else:
+            filed_fraction = category_match[a][true_category]
+            misfiled_fraction = sum([category_match[a][x] for x in category_match[a] if x != true_category])
+            filed_fraction /= cluster_size
+            misfiled_fraction /= cluster_size
+            category_scores[true_category] = (filed_fraction, cluster_size)
+    all_true_categories = list(set(KEY.true_categories.values()))
+    for c in all_true_categories:
+        if c in category_scores:
+            filed_fraction, cluster_size = category_scores[c]
+            print("Category %6s --- [%6.2f pct found], detected cluster of size %5d."
+                  % (str(c), filed_fraction*100, cluster_size))
+        else:
+            print("Category %6s --- not found." % str(c))
+    false_categories = [a for a in category_scores if category_scores[a][0] == 0]
+    for a in false_categories:
+        print("False category, size %5d." % category_scores[a][1])
+    print("Never filed: %5d." % len(leftovers))

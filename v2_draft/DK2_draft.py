@@ -1,18 +1,22 @@
 import SE2_draft as Edg
 import SN2_draft as Sim
 
+
 class DelaunayKey:
     # The big idea of the key is that it doesn't change
     # only TreeIndex will be updated during operation
     # (this is why the functionality of TreeIndex is quarantined to an attribute of Key)
 
     def __init__(self, delaunay):
+        self.alpha_step = 0.5
+        self.orphan_tolerance = 2
         self.delaunay = delaunay
         self._sim_to_edg = {}
         self._edg_to_sim = {}
         self.treeIndex = AlphaTreeIndex()
         self.initialize_keys()
         self.alpha_root = None
+        self.true_categories = None
 
     def get_simplex(self, edge):
         return self._edg_to_sim[edge]
@@ -37,6 +41,11 @@ class DelaunayKey:
 
     def add_branch(self, root):
         self.alpha_root = root
+
+    def load_true_answers(self, true_answers):
+        self.true_categories = {}
+        for i, p in enumerate(self.delaunay.points):
+            self.true_categories[tuple(p)] = true_answers[i]
 
 
 class AlphaTreeIndex:

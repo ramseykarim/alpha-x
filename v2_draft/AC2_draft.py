@@ -21,6 +21,8 @@ class AlphaCluster:
 
         # parent pointer! useful!
         self.parent = parent
+        # how far from root is this cluster (root is 0)
+        self._child_degree = None
         # A full list is an awful idea; we should just query the elements for a specific level if we need it
         # This used to be self.cluster_elements = [cluster_elements] but that's dumb, so we're changing it
         # to only store the initial list. We know the initial list is coherent at the first step
@@ -94,7 +96,7 @@ class AlphaCluster:
         while self._coherent:
             # We begin a NEW STEP
             # First, adjust the alpha level
-            self._next_alpha *= utils.ALPHA_STEP
+            self._next_alpha *= utils.KEY.alpha_step
 
             # Drop everything GREATER THAN the current alpha
             # This guarantees everything left is LE(<=) the alpha level
@@ -138,7 +140,7 @@ class AlphaCluster:
                 self.continue_case(len(remaining_simplices))
             else:
                 # We dropped something! What's left?
-                if len(remaining_simplices) < utils.ORPHAN_TOLERANCE:
+                if len(remaining_simplices) < utils.KEY.orphan_tolerance:
                     # Not enough left for traversal! End it.
                     # We will do this more efficiently by putting cluster list into its own list
                     # It will fail a length check, we already know that, and it can piggyback onto the logic for "no significant children"
@@ -148,7 +150,7 @@ class AlphaCluster:
                     # Traverse! Assume traverse(remaining_simplices.copy()) just returns a list of FROZENsets of simplices
                     cb_list = utils.traverse(remaining_simplices.copy())  # This means traverse() can do whatever it wants with its argument
                 # Filter cluster_list by ORPHAN_TOLERANCE
-                negligible_cluster_pairs = [(c, b) for c, b in cb_list if len(c) < utils.ORPHAN_TOLERANCE]
+                negligible_cluster_pairs = [(c, b) for c, b in cb_list if len(c) < utils.KEY.orphan_tolerance]
                 cluster_list, bound_list = tuple(map(list, zip(*cb_list)))
                 for cluster, bound in negligible_cluster_pairs:
                     # cluster is a frozenset, bound is a set
@@ -233,7 +235,7 @@ class AlphaCluster:
 
     def cluster_at_alpha(self, alpha):
         # Returns simplices and boundaries of this cluster at alpha
-        assert self.alpha_range[0] >= alpha > self.alpha_range[-1]*utils.ALPHA_STEP
+        assert self.alpha_range[0] >= alpha > self.alpha_range[-1]*utils.KEY.alpha_step
         valid_simplices = {s for s in self.cluster_elements if s.circumradius <= alpha}
         cb_pair = utils.traverse(valid_simplices)
         cb_pair = [(c, b) for c, b in cb_pair if self.tracer_simplex in c].pop()
@@ -243,3 +245,21 @@ class AlphaCluster:
         # We'll put the cluster list as the simplex set! Useful! Be careful with that!
         bound_gap_list.insert(0, (bound_gap_list.pop(0)[0], cluster_list))
         return bound_gap_list
+
+    def find_degree(self):
+        if self == utils.KEY.alpha_root:
+            self._child_degree = 0
+        else:
+            self._child_degree = self.parent.get_degree() + 1
+
+    def get_degree(self):
+        if self._child_degree is None:
+            self.find_degree()
+        return self._child_degree
+
+    """
+    # is this worth it?
+    def __hash__(self):
+        # color is unique!
+        return hash(self.color)
+    """
