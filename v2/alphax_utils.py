@@ -294,12 +294,12 @@ def rand_color():
     h = (255, 255, 255)
     n = 0
     colors_keys, colors_values = COLORS
-    while not dark_color(h) or h in KEY.treeIndex.colors:
+    while (not dark_color(h)) or (colors_keys[n] in KEY.treeIndex.colors):
         n = randrange(0, len(colors_keys))
         h = colors_values[n]
         h = (int(i * 255) for i in h) if isinstance(h, tuple) else tuple(
             int(h.lstrip('#')[i:i + 2], 16) for i in (0, 2, 4))
-    KEY.treeIndex.colors.add(colors_values[n])
+    KEY.treeIndex.colors.add(colors_keys[n])
     return colors_values[n]
 
 
@@ -402,7 +402,16 @@ def naive_point_grouping():
     used_points = set()
     while stack:
         a = stack.popleft()
-        boundary, elements = a.cluster_at_alpha(a.alpha_range[0])[0]
+        if a == KEY.alpha_root:
+            if a.subclusters:
+                # for the root, use the alpha of the last branch
+                alpha = min((x.alpha_range[0] for x in a.subclusters))
+            else:
+                # for a lone root, use the geometric mean of the alpha range
+                alpha = np.exp(np.mean(np.log(np.array([a.alpha_range[0], a.alpha_range[-1]]))))
+        else:
+            alpha = a.alpha_range[0]
+        boundary, elements = a.cluster_at_alpha(alpha)[0]
         color = a.color
         vertices = deque()
         for b in boundary:
@@ -442,9 +451,10 @@ def generate_boundary_artist(vertices, color):
         artist.set_linewidth(2.5)
     elif DIM == 3:
         artist = Poly3DCollection(vertices, linewidths=1)
+        # transparency alpha must be set BEFORE face/edge color
+        artist.set_alpha(0.5)
         artist.set_facecolor(color)
         artist.set_edgecolor('k')
-        artist.set_alpha(0.2)
     else:
         raise ValueError("%d dimensions needs special attention for plotting." % int(DIM))
     return artist
@@ -462,13 +472,19 @@ def prepare_plots(figure):
         dendrogram_params = ((2, 4), (1, 3))
         main_params = ((2, 4), (0, 0))
         d_c, d_r = 1, 1
-        m_c, m_r = 3, 1
+        m_c, m_r = 3, 2
         projection = "3d"
     else:
         raise ValueError("%d dimensions needs special attention for plotting." % int(DIM))
     dendrogram_ax = plt.subplot2grid(*dendrogram_params, colspan=d_c, rowspan=d_r)
     main_ax = plt.subplot2grid(*main_params, colspan=m_c, rowspan=m_r, projection=projection)
-    return dendrogram_ax, main_ax
+    if DIM == 3:
+        surface_plotter = main_ax.add_collection3d
+    elif DIM == 2:
+        surface_plotter = main_ax.add_artist
+    else:
+        raise ValueError("%d dimensions needs special attention for plotting." % int(DIM))
+    return dendrogram_ax, main_ax, surface_plotter
 
 
 def find_membership(alpha):
