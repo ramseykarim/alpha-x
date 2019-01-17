@@ -463,8 +463,8 @@ def generate_boundary_artist(vertices, color):
 def prepare_plots(figure):
     plt.figure(figure.number)
     if DIM == 2:
-        dendrogram_params = ((6, 6), (3, 4))
-        main_params = ((6, 6), (0, 0))
+        dendrogram_params = ((5, 6), (2, 4))
+        main_params = ((5, 6), (0, 0))
         d_c, d_r = 2, 3
         m_c, m_r = 4, 5
         projection = "rectilinear"

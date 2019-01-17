@@ -53,11 +53,11 @@ def get_another_benchmark():
     return np.genfromtxt(path + fn, usecols=[0, 1])
 
 
-data = get_sco_ob()
+data = get_carina()
 
 apy.initialize(data)
 apy.KEY.alpha_step = 0.95
-apy.KEY.orphan_tolerance = 150
+apy.KEY.orphan_tolerance = 80
 apy.recurse()
 
 # apy.KEY = get_sco_ob()
@@ -80,12 +80,12 @@ d_ax.set_ylabel("Alpha")
 d_ax.set_xticklabels([])
 d_ax.invert_yaxis()
 
-# surfaces_list, points_list = apy.naive_point_grouping()
-surfaces_list, points_list = apy.alpha_surfaces(0.484)
+surfaces_list, points_list = apy.naive_point_grouping()
+# surfaces_list, points_list = apy.alpha_surfaces(0.009)
 for s in surfaces_list:
     surface_plotter(s)
 for points, color, transparency in points_list:
-    m_ax.plot(*points, marker='.', color=color, alpha=transparency, linestyle='None', markersize=2)
+    m_ax.plot(*points, marker='.', color=color, alpha=transparency, linestyle='None', markersize=1)
 
 if sky:
     m_ax.set_xlabel("RA")
