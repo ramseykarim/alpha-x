@@ -53,7 +53,7 @@ def get_another_benchmark():
     return np.genfromtxt(path + fn, usecols=[0, 1])
 
 
-data = get_carina()
+data, answers = get_benchmark_and_answers()
 
 apy.initialize(data)
 apy.KEY.alpha_step = 0.95
@@ -80,8 +80,8 @@ d_ax.set_ylabel("Alpha")
 d_ax.set_xticklabels([])
 d_ax.invert_yaxis()
 
-surfaces_list, points_list = apy.naive_point_grouping()
-# surfaces_list, points_list = apy.alpha_surfaces(0.009)
+# surfaces_list, points_list = apy.naive_point_grouping()
+surfaces_list, points_list = apy.alpha_surfaces(11200)
 for s in surfaces_list:
     surface_plotter(s)
 for points, color, transparency in points_list:
@@ -104,9 +104,9 @@ if apy.DIM == 3:
     m_ax.set_zlim([-10, 5])
 plt.show()
 
-# categories, leftovers = apy.find_membership(1000)
+categories, leftovers = apy.find_membership(11200)
 
 # NEED ANSWERS FOR THESE TO WORK
-# apy.KEY.load_true_answers(answers)
+apy.KEY.load_true_answers(answers)
 
-# apy.check_answers_membership(categories, leftovers)
+apy.check_answers_membership(categories, leftovers)

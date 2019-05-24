@@ -1,5 +1,6 @@
 import SimplexEdge as Edg
 import SimplexNode as Sim
+import sys
 
 
 class DelaunayKey:
@@ -28,7 +29,15 @@ class DelaunayKey:
         return iter(self._sim_to_edg)
 
     def initialize_keys(self):
-        for simplex_indices in self.delaunay.simplices:
+        total_simplices = len(self.delaunay.simplices)
+        last_count = -1
+        print("TOTAL # SIMPLICES", total_simplices)
+        for count, simplex_indices in enumerate(self.delaunay.simplices):
+            now_count = int(count*100/total_simplices)
+            if last_count < now_count:
+                sys.stdout.write(f"{now_count}%\r")
+                sys.stdout.flush()
+                last_count = now_count
             simplex = Sim.SimplexNode([self.delaunay.points[i] for i in simplex_indices])
             edges = [Edg.SimplexEdge([self.delaunay.points[vtx_id] for j, vtx_id in enumerate(simplex_indices) if j!= i]) for i in range(len(simplex_indices))]
             self._sim_to_edg[simplex] = edges
@@ -38,6 +47,7 @@ class DelaunayKey:
                     self._edg_to_sim[e].append(simplex)
                 else:
                     self._edg_to_sim[e] = [simplex]
+        print()
 
     def add_branch(self, root):
         self.alpha_root = root
@@ -62,4 +72,3 @@ class AlphaTreeIndex:
         if alpha not in self.alpha_range:
             self.alpha_range[alpha] = set()
         self.alpha_range[alpha].add(cluster)
-
