@@ -7,9 +7,9 @@ import pickle
 #  and alpha shape them
 sky = False
 data_dir = "/n/sgraraid/filaments/data/TEST4/helpss_scratch_work/MantiPython/"
-data_file = "points_file_smallest.pkl"
+data_file = "points_file_small.pkl"
 with open(data_dir + data_file, 'rb') as pfl:
-    data = pickle.load(pfl)[:300, :]
+    data = pickle.load(pfl)[:3000, :]
 data[:, 0] *= 4./134.
 data[:, 0] += 10
 data[:, 1] *= 3./100.
