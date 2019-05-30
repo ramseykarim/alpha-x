@@ -39,9 +39,15 @@ def initialize(points):
     KEY = DKey.DelaunayKey(Delaunay(points))
     global DIM
     DIM = points.shape[1]
+    KEY.dim = DIM
     global COLORS
     COLORS = get_colors()
 
+def reinitialize(existing_key):
+    global KEY
+    KEY = existing_key
+    global DIM
+    DIM = KEY.dim
 
 # These things need to go to UTILS
 def identify_null_simplex(simplex, cluster_list):

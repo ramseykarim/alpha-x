@@ -18,6 +18,7 @@ class DelaunayKey:
         self.initialize_keys()
         self.alpha_root = None
         self.true_categories = None
+        self.dim = None
 
     def get_simplex(self, edge):
         return self._edg_to_sim[edge]

@@ -7,9 +7,9 @@ import pickle
 #  and alpha shape them
 sky = False
 data_dir = "/n/sgraraid/filaments/data/TEST4/helpss_scratch_work/MantiPython/"
-data_file = "points_file_small.pkl"
+data_file = "points_file_smallest.pkl"
 with open(data_dir + data_file, 'rb') as pfl:
-    data = pickle.load(pfl)[:3000, :]
+    data = pickle.load(pfl)[:1000, :]
 data[:, 0] *= 4./134.
 data[:, 0] += 10
 data[:, 1] *= 3./100.
@@ -21,6 +21,11 @@ apy.initialize(data)
 apy.KEY.alpha_step = 0.9
 apy.KEY.orphan_tolerance = 100
 apy.recurse()
+
+tree_file = "atree_file_smallest.pkl"
+with open(data_dir + tree_file, 'wb') as pfl:
+    pickle.dump(apy.KEY, pfl)
+sys.exit()
 
 rectangles, base_width, lim = apy.dendrogram()
 lim_alpha_lo, lim_alpha_hi = lim
