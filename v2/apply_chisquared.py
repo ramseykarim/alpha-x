@@ -1,4 +1,6 @@
 import numpy as np
+import alphax_utils as apy
+import matplotlib.pyplot as plt
 import pickle
 
 # Feed in discrete points from chi squared grid
@@ -52,8 +54,11 @@ if sky:
 else:
     m_ax.set_xlabel("X")
     m_ax.set_ylabel("Y")
+    m_ax.set_xlim([10, 14])
+    m_ax.set_ylim([20, 22])
     m_ax.set_aspect('equal')
 if apy.DIM == 3:
     m_ax.set_zlabel("Z")
+    m_ax.set_zlim([20, 23])
     # m_ax.set_zlabel("equivalent radial \"angle\" (deg)")
 plt.show()
