@@ -1,6 +1,7 @@
 import numpy as np
 import alphax_utils as apy
 import matplotlib.pyplot as plt
+import sys
 import pickle
 
 # Feed in discrete points from chi squared grid
@@ -8,25 +9,27 @@ import pickle
 sky = False
 data_dir = "/n/sgraraid/filaments/data/TEST4/helpss_scratch_work/MantiPython/"
 data_file = "points_file_smallest.pkl"
-with open(data_dir + data_file, 'rb') as pfl:
-    data = pickle.load(pfl)[:1000, :]
-data[:, 0] *= 4./134.
-data[:, 0] += 10
-data[:, 1] *= 3./100.
-data[:, 1] += 20
-data[:, 2] *= 2./67.
-data[:, 2] += 20
-print("DATA SHAPE:", data.shape)
-apy.initialize(data)
-apy.KEY.alpha_step = 0.9
-apy.KEY.orphan_tolerance = 100
-apy.recurse()
-
 tree_file = "atree_file_smallest.pkl"
-with open(data_dir + tree_file, 'wb') as pfl:
-    pickle.dump(apy.KEY, pfl)
-sys.exit()
+if False:
+    with open(data_dir + data_file, 'rb') as pfl:
+        data = pickle.load(pfl)[:1000, :]
+    data[:, 0] *= 4./134.
+    data[:, 0] += 10
+    data[:, 1] *= 3./100.
+    data[:, 1] += 20
+    data[:, 2] *= 2./67.
+    data[:, 2] += 20
+    print("DATA SHAPE:", data.shape)
+    apy.initialize(data)
+    apy.KEY.alpha_step = 0.9
+    apy.KEY.orphan_tolerance = 100
+    apy.recurse()
+    with open(data_dir + tree_file, 'wb') as pfl:
+        pickle.dump(apy.KEY, pfl)
+    sys.exit()
 
+with open(data_dir + tree_file, 'rb') as pfl:
+    apy.reinitialize(pickle.load(pfl))
 rectangles, base_width, lim = apy.dendrogram()
 lim_alpha_lo, lim_alpha_hi = lim
 fig = plt.figure()
