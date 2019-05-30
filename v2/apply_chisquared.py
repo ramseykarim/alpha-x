@@ -4,14 +4,20 @@ import pickle
 # Feed in discrete points from chi squared grid
 #  and alpha shape them
 sky = False
-data_dir = "/n/sgraraid/filaments/data/TEST4/helpss_scratch_work/MantiPython"
+data_dir = "/n/sgraraid/filaments/data/TEST4/helpss_scratch_work/MantiPython/"
 data_file = "points_file_smallest.pkl"
 with open(data_dir + data_file, 'rb') as pfl:
-    data = pickle.load(pfl)
-
+    data = pickle.load(pfl)[:300, :]
+data[:, 0] *= 4./134.
+data[:, 0] += 10
+data[:, 1] *= 3./100.
+data[:, 1] += 20
+data[:, 2] *= 2./67.
+data[:, 2] += 20
+print("DATA SHAPE:", data.shape)
 apy.initialize(data)
-apy.KEY.alpha_step = 0.6
-apy.KEY.orphan_tolerance = 1000
+apy.KEY.alpha_step = 0.9
+apy.KEY.orphan_tolerance = 100
 apy.recurse()
 
 rectangles, base_width, lim = apy.dendrogram()
@@ -23,8 +29,9 @@ for r in rectangles:
 d_ax.set_xlim([-0.05 * base_width, 1.05 * base_width])
 d_ax.set_ylim([lim_alpha_lo * 0.9, lim_alpha_hi * 1.1])
 if apy.DIM == 3:
-    d_ax.set_xlim([175e2, 24e3])
-    d_ax.set_ylim([0.227, 0.545])
+    pass
+    # d_ax.set_xlim([175e2, 24e3])
+    # d_ax.set_ylim([0.227, 0.545])
 d_ax.set_yscale('log')
 d_ax.set_xlabel("Relative cluster size")
 d_ax.set_ylabel("Alpha")
