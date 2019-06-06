@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial import Delaunay
 from numpy.linalg import det
 from scipy.misc import factorial
+from scipy.spatial.distance import pdist, squareform
 from random import seed, randrange
 import AlphaCluster as AlphaC
 import DelaunayKey as DKey
@@ -236,16 +237,22 @@ Simplex volume, circumradius math stuff
 
 
 def euclidean_distance_matrix(point_array):
-    n_points = point_array.shape[0]
-    d_matrix = np.zeros((n_points, n_points), dtype=np.float64)
-    for i in range(n_points):
-        for j in range(n_points):
-            if i == j:
-                d_matrix[i, j] = 0.
-            elif j > i:
-                d = np.sum((point_array[i, :] - point_array[j, :]) ** 2.)
-                d_matrix[i, j] = d_matrix[j, i] = d
-    return d_matrix
+	if True:
+		# absolute fastest method
+		return squareform(np.square(pdist(point_array)))
+	else:
+		# this is the old method I wrote; too many loops!!!
+		# point array is of shape (ndim + 1, ndim)
+	    n_points = point_array.shape[0]
+	    d_matrix = np.zeros((n_points, n_points), dtype=np.float64)
+	    for i in range(n_points):
+	        for j in range(n_points):
+	            if i == j:
+	                d_matrix[i, j] = 0.
+	            elif j > i:
+	                d = np.sum((point_array[i, :] - point_array[j, :]) ** 2.)
+	                d_matrix[i, j] = d_matrix[j, i] = d
+	    return d_matrix
 
 
 def cm_volume_helper(cm_det_abs_root, n):
@@ -260,7 +267,7 @@ def cayley_menger_vr(point_array):
         These points should define a valid n-dimensional simplex of non-zero volume
     :return: tuple of floats (volume, circumradius)
     """
-    n_points = point_array.shape[0] - 1
+    n_points = point_array.shape[0] - 1 # I did this because of n-x simplices (nonhomogeneous)
     d_matrix = euclidean_distance_matrix(point_array)
     cm_det_root = np.sqrt(np.abs(det(pad_matrix(d_matrix))))
     volume = cm_volume_helper(cm_det_root, n_points)
