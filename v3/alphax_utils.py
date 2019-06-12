@@ -8,7 +8,7 @@ from numpy.linalg import det
 def cayley_menger_vr(simplex_array):
 	# simplex_array is of shape (nsimplices, ndim + 1, ndim)
 	# prepare distance matrix
-	nsimplices, ndim_p1 = simplex_array.shape[0:2]\
+	nsimplices, ndim_p1 = simplex_array.shape[0:2]
 	# This will work for sets of n-x simplices embedded in dimension n with x>0
 	ndim = ndim_p1 - 1
 	d_matrix = np.empty((nsimplices, ndim_p1, ndim_p1))
@@ -21,6 +21,10 @@ def cayley_menger_vr(simplex_array):
 	circumradius = np.sqrt(np.abs(det(d_matrix)) / 2.) / cm_det_root
 	return volume, circumradius
 
+
+"""
+The old ways
+"""
 
 def OLD_euclidean_distance_matrix(point_array):
 	# this is the old method I wrote; too many loops!!!
