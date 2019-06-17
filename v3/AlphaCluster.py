@@ -11,7 +11,7 @@ operation and implementation than the V2 iteration, but serves the same
 general purpose and thus retains the name.
 """
 
-MINIMUM_MEMBERSHIP = 1
+MINIMUM_MEMBERSHIP = 1000
 
 
 class AlphaCluster:
@@ -22,9 +22,9 @@ class AlphaCluster:
         # members is a set/frozenset of (int) simplex indices
         self.members = set()
         # circumradius_map is a dictionary from circumradii to simplex indices
-        self.circumradius_map = dict()
+        self.alpha_map = dict()
         # circumradii is a sorted numpy array of keys to circumradius_map
-        self.circumradii = None
+        self.alphas = None
         # check if this is still mutable; should not be if it has a parent
         self.frozen = False
         # the top-level parent node of this cluster
@@ -45,11 +45,13 @@ class AlphaCluster:
         # need to specify circumradius
         self.members.add(item)
         self.size += 1
-        self.circumradius_map[circumradius] = item
+        self.alpha_map[circumradius] = item
 
     def engulf(self, cluster):
         self.members |= cluster.members
-        self.circumradius_map.update(cluster.circumradius_map)
+        self.alpha_map.update(cluster.circumradius_map)
+        self.alphas = np.concatenate([self.alphas, cluster.circumradii])
+        self.alphas.sort(kind='mergesort')
 
     def __contains__(self, item):
         # check if an item is in or below this cluster
@@ -63,8 +65,11 @@ class AlphaCluster:
             raise RuntimeError("This simplex is *already* frozen")
         self.frozen = True
         self.members = frozenset(self.members)
-        self.circumradii = np.array(sorted(self.circumradius_map.keys()))
+        self.alphas = np.array(sorted(self.alpha_map.keys()))
         self.set_root(parent)
+
+    def isleaf(self):
+        return (not self.children)
 
     def set_root(self, root):
         self.root = root
@@ -76,9 +81,18 @@ class AlphaCluster:
             raise RuntimeError("This simplex is not frozen!")
         # also passes identity to largest subcluster
         for i, c in enumerate(self.children):
+            c.collapse()
             if (i == 0) or (len(c) < MINIMUM_MEMBERSHIP):
                 self.engulf(c)
-            self.children.remove(c)
+                self.children.remove(c)
+
+    def __repr__(self):
+        s = "{:d}/{:d}".format(len(self.members), self.size)
+        if self.frozen:
+            t = "{:.2E}/{:.2E}".format(self.alphas[-1], self.alphas[0])
+        else:
+            t = "::/{:.2E}".format(min(self.alpha_map.keys()))
+        return "AlphaCluster({:s}|{:s})".format(s, t)
 
     @staticmethod
     def set_children(children):

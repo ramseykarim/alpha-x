@@ -22,6 +22,30 @@ def cayley_menger_vr(simplex_array):
 	return volume, circumradius
 
 
+def dendrogram(root):
+	a_step = 0.95
+	base_width = len(root)
+	if root.isleaf():
+		first_child = root
+	else:
+		first_child = max(root.children, key=lambda x: x.alphas[-1])
+	lim_alpha_lo = lim_alpha_hi = first_child.alphas[-1] / a_step
+	stack = [(root, base_width/2),]
+	count = 0
+	patch_stack = []
+	while stack:
+		count += 1
+		a, center = stack.pop()
+		color = get_color()
+		fork_alphas = [sc.alphas[-1] for sc in a.children]
+		stretching_patch_upward = False
+		start_alpha, end_alpha = None, None
+		for i, alpha in enumerate(a.alphas[::-1]):
+			end_alpha = alpha * a_step
+			if not stretching_patch_upward:
+				start_alpha = alpha
+			width = len(a)
+
 """
 The old ways
 """

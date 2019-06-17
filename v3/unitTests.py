@@ -7,8 +7,8 @@ from scipy.spatial import Delaunay
 from scipy.spatial.distance import pdist, squareform
 
 def get_test_data():
-	# srcfile = "../../PyAlpha_drafting/test_data/Ssets/s1.txt"
-	srcfile = "../../PyAlpha_drafting/test_data/filament5500_sampleNH2_betah1.80.dat"
+	srcfile = "../../PyAlpha_drafting/test_data/Ssets/s1.txt"
+	# srcfile = "../../PyAlpha_drafting/test_data/filament5500_sampleNH2_betah1.80.dat"
 	points = np.genfromtxt(srcfile)
 	return points
 
@@ -67,7 +67,7 @@ def test_basic_structure():
 	# printcluster(clusters[0])
 
 def test_AlphaCluster():
-	from AlphaCluster import AlphaCluster
+	import AlphaCluster as alphac
 	p = get_test_data()
 	tri = Delaunay(p)
 	ndim = p.shape[1]
@@ -81,18 +81,33 @@ def test_AlphaCluster():
 		cr = cr_array[simp_idx]
 		if len(included) == 0:
 			# simplex is isolated
-			assigned_cluster = AlphaCluster(simp_idx, cr)
+			assigned_cluster = alphac.AlphaCluster(simp_idx, cr)
 		elif len(included) == 1:
 			# simplex borders exactly one existing cluster
 			assigned_cluster = included.pop()
 			assigned_cluster.add(simp_idx, cr)
 		else:
 			# included in 2 or more clusters
-			assigned_cluster = AlphaCluster(simp_idx, cr, *included)
+			assigned_cluster = alphac.AlphaCluster(simp_idx, cr, *included)
 		simp_lookup[simp_idx] = assigned_cluster
+
 	clusters = set(simp_lookup)
 	root = simp_lookup[0].root
+	root.freeze(root)
 	all_root = {x.root for x in simp_lookup}
+	utils.dendrogram(root)
+	return
+
+	def census(c, s):
+		s.add(c)
+		for sc in c.children:
+			census(sc, s)
+
+	init_clusters = set()
+	census(root, init_clusters)
+	print()
+
+	assert root is next(iter(all_root))
 	print("roots", len(all_root))
 	print("clusters: ", len(clusters))
 	def printcluster(c, prefix=""):
@@ -102,6 +117,17 @@ def test_AlphaCluster():
 			printcluster(sc, prefix=prefix+"|  ")
 		print(prefix+" }")
 	# printcluster(clusters[0])
+	root.collapse()
+
+	remaining_clusters = set()
+	census(root, remaining_clusters)
+	print()
+	print("initial clusters", len(init_clusters))
+	print("remaining clusters", len(remaining_clusters))
+	# lsi = [len(x.members) for x in init_clusters]
+	lsr = [len(x.members) for x in remaining_clusters]
+	plt.plot(lsr, '.')
+	plt.show()
 	return
 
 test_AlphaCluster()
