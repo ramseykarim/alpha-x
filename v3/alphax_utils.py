@@ -23,12 +23,21 @@ def cayley_menger_vr(simplex_array):
 
 
 def dendrogram(root):
+	"""
+	Dendrogram routine. Roughly follows v2 routine but optimized for v3.
+	"""
+	# Artificially set an alpha step for block height
 	a_step = 0.95
+	# X axis width is proportional to total number of Delaunay simplices
 	base_width = len(root)
+	# Start just prior to the first branch, if possible
 	if root.isleaf():
+		# unlikely but possible
 		first_child = root
 	else:
-		first_child = max(root.children, key=lambda x: x.alphas[-1])
+		# likely that there are multiple clusters
+		first_child = max(root.children, key=lambda x: x.max_alpha())
+	# set y axis limits; will adjust lower limit as tree is traversed
 	lim_alpha_lo = lim_alpha_hi = first_child.alphas[-1] / a_step
 	stack = [(root, base_width/2),]
 	count = 0

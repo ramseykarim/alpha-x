@@ -23,6 +23,9 @@ def plot_triangles(triangle_list):
 	plt.show()
 
 def test_basic_structure():
+	"""
+	Simple version that uses nested sets to outline concept
+	"""
 	p = get_test_data()
 	print(p.shape)
 	tri = Delaunay(p)
@@ -67,6 +70,10 @@ def test_basic_structure():
 	# printcluster(clusters[0])
 
 def test_AlphaCluster():
+	"""
+	Testing ground for structure of cluster code
+	Uses AlphaCluster objects
+	"""
 	import AlphaCluster as alphac
 	p = get_test_data()
 	tri = Delaunay(p)

@@ -23,7 +23,7 @@ class AlphaCluster:
         self.members = set()
         # circumradius_map is a dictionary from circumradii to simplex indices
         self.alpha_map = dict()
-        # circumradii is a sorted numpy array of keys to circumradius_map
+        # circumradii is a sorted (INCREASING) numpy array of keys to circumradius_map
         self.alphas = None
         # check if this is still mutable; should not be if it has a parent
         self.frozen = False
@@ -40,7 +40,7 @@ class AlphaCluster:
 
     def add(self, item, circumradius):
         if self.frozen:
-            raise RuntimeError("This simplex is frozen.")
+            raise RuntimeError("This shape is frozen.")
         # add an item to this cluster
         # need to specify circumradius
         self.members.add(item)
@@ -50,8 +50,31 @@ class AlphaCluster:
     def engulf(self, cluster):
         self.members |= cluster.members
         self.alpha_map.update(cluster.circumradius_map)
-        self.alphas = np.concatenate([self.alphas, cluster.circumradii])
+        self.alphas = np.concatenate([self.alphas, cluster.alphas])
         self.alphas.sort(kind='mergesort')
+
+    def collapse(self):
+        if not self.frozen:
+            raise RuntimeError("This shape is not frozen!")
+        # also passes identity to largest subcluster
+        for i, c in enumerate(self.children):
+            c.collapse()
+            if (i == 0) or (len(c) < MINIMUM_MEMBERSHIP):
+                self.engulf(c)
+                self.children.remove(c)
+
+    def freeze(self, parent):
+        if self.frozen:
+            raise RuntimeError("This shape is *already* frozen")
+        self.frozen = True
+        self.members = frozenset(self.members)
+        self.alphas = np.array(sorted(self.alpha_map.keys()))
+        self.set_root(parent)
+
+    def set_root(self, root):
+        self.root = root
+        for c in self.children:
+            c.set_root(root)
 
     def __contains__(self, item):
         # check if an item is in or below this cluster
@@ -60,31 +83,14 @@ class AlphaCluster:
     def __len__(self):
         return self.size
 
-    def freeze(self, parent):
-        if self.frozen:
-            raise RuntimeError("This simplex is *already* frozen")
-        self.frozen = True
-        self.members = frozenset(self.members)
-        self.alphas = np.array(sorted(self.alpha_map.keys()))
-        self.set_root(parent)
-
     def isleaf(self):
         return (not self.children)
 
-    def set_root(self, root):
-        self.root = root
-        for c in self.children:
-            c.set_root(root)
+    def min_alpha(self):
+        return self.alphas[0]
 
-    def collapse(self):
-        if not self.frozen:
-            raise RuntimeError("This simplex is not frozen!")
-        # also passes identity to largest subcluster
-        for i, c in enumerate(self.children):
-            c.collapse()
-            if (i == 0) or (len(c) < MINIMUM_MEMBERSHIP):
-                self.engulf(c)
-                self.children.remove(c)
+    def max_alpha(self):
+        return self.alphas[-1]
 
     def __repr__(self):
         s = "{:d}/{:d}".format(len(self.members), self.size)
