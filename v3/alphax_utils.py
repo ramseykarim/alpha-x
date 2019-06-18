@@ -38,22 +38,52 @@ def dendrogram(root):
 		# likely that there are multiple clusters
 		first_child = max(root.children, key=lambda x: x.max_alpha())
 	# set y axis limits; will adjust lower limit as tree is traversed
-	lim_alpha_lo = lim_alpha_hi = first_child.alphas[-1] / a_step
-	stack = [(root, base_width/2),]
+	lim_alpha_lo = lim_alpha_hi = first_child.max_alpha() / a_step
+	# start traversing with root; reference the center of the x axis
+	stack = [(root, lim_alpha_hi, base_width/2),]
+	# seems like this was for a debug print statement
 	count = 0
+	# collect patches; order doesn't matter
 	patch_stack = []
 	while stack:
 		count += 1
-		a, center = stack.pop()
+        # msg = ".. %3d ../r" % count
+        # could sys.stdout.write(that)
+		a, current_alpha, center = stack.pop()
 		color = get_color()
-		fork_alphas = [sc.alphas[-1] for sc in a.children]
+		# if step includes fork alpha, split tree
+		fork_alphas = [sc.max_alpha() for sc in a.children]
+		# if no change in membership, don't end the patch
 		stretching_patch_upward = False
+		# current patch limits
 		start_alpha, end_alpha = None, None
+		still_iterating = True
+		while still_iterating:
+			end_alpha = current_alpha * a_step
+			if not stretching_patch_upward:
+				start_alpha = current_alpha
+			# size minus # of simplices too large
+			width = len(a) - np.searchsorted(a.alphas, current_alpha)
+			width -= sum(len(sc) for sc in a.children if sc.max_alpha() > current_alpha)
+			# should have break condition if width drops below MINIMUM_MEMBERSHIP or something
+			if (a.min_alpha() < end_alpha) and (np.searchsorted(a.alphas, [current_alpha, end_alpha]).ptp() == 0):
+				stretching_patch_upward = True
+				continue
+			true_left_edge = center - width / 2
+			patch_stack.append(new_patch((true_left_edge, end_alpha), width, start_alpha - end_alpha, color))
+			stretching_patch_upward = False
+			# # TODO: need to remember/write all the "current fork" stuff...
+			pass
+
 		for i, alpha in enumerate(a.alphas[::-1]):
 			end_alpha = alpha * a_step
 			if not stretching_patch_upward:
 				start_alpha = alpha
 			width = len(a)
+
+def get_color():
+	# placeholder; need to implement
+	return 'blue'
 
 """
 The old ways
