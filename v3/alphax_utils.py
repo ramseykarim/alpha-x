@@ -2,7 +2,18 @@ import numpy as np
 from scipy.spatial import Delaunay
 from scipy.spatial.distance import pdist, squareform
 from scipy.misc import factorial
+from random import seed, randrange
 from numpy.linalg import det
+import matplotlib.pyplot as plt
+from matplotlib import colors as m_colors
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from matplotlib.collections import LineCollection
+from AlphaCluster import MINIMUM_MEMBERSHIP
+
+
+SEED = 635541
+seed(SEED)
 
 
 def cayley_menger_vr(simplex_array):
@@ -38,19 +49,21 @@ def dendrogram(root):
 		# likely that there are multiple clusters
 		first_child = max(root.children, key=lambda x: x.max_alpha())
 	# set y axis limits; will adjust lower limit as tree is traversed
-	lim_alpha_lo = lim_alpha_hi = first_child.max_alpha() / a_step
-	# start traversing with root; reference the center of the x axis
+	lim_alpha_lo = lim_alpha_hi = first_child.max_alpha() / (a_step**2)
+	# start traversing with root; reference the center of the x axis & large-alpha bound
 	stack = [(root, lim_alpha_hi, base_width/2),]
 	# seems like this was for a debug print statement
 	count = 0
 	# collect patches; order doesn't matter
 	patch_stack = []
+	colors = get_color()
 	while stack:
 		count += 1
         # msg = ".. %3d ../r" % count
         # could sys.stdout.write(that)
 		a, current_alpha, center = stack.pop()
-		color = get_color()
+		current_alpha /= a_step
+		color = next(colors)
 		# if step includes fork alpha, split tree
 		fork_alphas = [sc.max_alpha() for sc in a.children]
 		# if no change in membership, don't end the patch
@@ -59,31 +72,106 @@ def dendrogram(root):
 		start_alpha, end_alpha = None, None
 		still_iterating = True
 		while still_iterating:
-			end_alpha = current_alpha * a_step
+			current_alpha *= a_step
+			end_alpha = current_alpha*a_step
 			if not stretching_patch_upward:
 				start_alpha = current_alpha
-			# size minus # of simplices too large
-			width = len(a) - np.searchsorted(a.alphas, current_alpha)
-			width -= sum(len(sc) for sc in a.children if sc.max_alpha() > current_alpha)
-			# should have break condition if width drops below MINIMUM_MEMBERSHIP or something
-			if (a.min_alpha() < end_alpha) and (np.searchsorted(a.alphas, [current_alpha, end_alpha]).ptp() == 0):
-				stretching_patch_upward = True
-				continue
+			# width from function
+			width = calc_current_width(a, current_alpha)
+			# current_forks is a list of children who should get their own block next
+			current_forks = [a.children[j] for j, x in enumerate(fork_alphas) if ((x < current_alpha) and (x >= end_alpha))]
+			if width >= MINIMUM_MEMBERSHIP and a.min_alpha() < end_alpha:
+				# if membership isn't dropping in this interval, then continue the block upwards
+				interval_width = np.searchsorted(a.alphas, [current_alpha, end_alpha]).ptp()
+				if (interval_width == 0) and not current_forks:
+					stretching_patch_upward = True
+					continue
+			else:
+				# minimum was reached, or smallest alpha in this interval
+				still_iterating = False
+
 			true_left_edge = center - width / 2
+			if true_left_edge < 1:
+				print("HEY")
+				print(">>", current_forks)
+				print(">>", )
 			patch_stack.append(new_patch((true_left_edge, end_alpha), width, start_alpha - end_alpha, color))
 			stretching_patch_upward = False
-			# # TODO: need to remember/write all the "current fork" stuff...
-			pass
+			if current_forks:
+				# add up length of fork children in this interval
+				total_new_width = float(sum(len(sc) for sc in current_forks))
+				# add on the next iteration width of this cluster
+				total_new_width += calc_current_width(a, end_alpha)
+				# left edge of this block
+				left_edge = 0
+				for sc in [a]+current_forks:
+					size = len(sc) if sc != a else calc_current_width(a, end_alpha)
+					fractional_width = size / total_new_width
+					new_centroid = (left_edge + fractional_width/2)*width + true_left_edge
+					left_edge += fractional_width
+					if sc == a:
+						center = new_centroid
+					else:
+						stack.append((sc, end_alpha, new_centroid))
+		if end_alpha < lim_alpha_lo:
+			lim_alpha_lo = end_alpha
+	return patch_stack, base_width, (lim_alpha_lo, lim_alpha_hi)
 
-		for i, alpha in enumerate(a.alphas[::-1]):
-			end_alpha = alpha * a_step
-			if not stretching_patch_upward:
-				start_alpha = alpha
-			width = len(a)
+
+def calc_current_width(current_cluster, current_alpha):
+	# sum up all the exceptions to width
+	# first, the simplices unique to this cluster that are too large
+	# searchsorted gives index in increasing sorted; if index is len(alphas), we want 0 exceptions
+	not_width = len(current_cluster.alphas) - np.searchsorted(current_cluster.alphas, current_alpha)
+	# second, sum up exceptions from clusters that have already branched off
+	not_width += sum(len(sc) for sc in current_cluster.children if sc.max_alpha() >= current_alpha)
+	return len(current_cluster) - not_width
 
 def get_color():
-	# placeholder; need to implement
-	return 'blue'
+	color_dict = get_colors()
+	used_colors = set()
+	while True:
+		c = rand_color(color_dict, used_colors)
+		yield c
+
+
+
+def get_colors():
+    colors = dict(m_colors.BASE_COLORS, **m_colors.CSS4_COLORS)
+    return list(zip(*colors.items()))
+
+
+def dark_color(rgb):
+    # rgb is a tuple (r, g, b) integers
+    return sum(rgb) < 600
+
+
+def rand_color(c_dict, used_colors):
+    h = (255, 255, 255)
+    n = 0
+    colors_keys, colors_values = c_dict
+    while (not dark_color(h)) or (colors_keys[n] in used_colors):
+        n = randrange(0, len(colors_keys))
+        h = colors_values[n]
+        h = (int(i * 255) for i in h) if isinstance(h, tuple) else tuple(
+            int(h.lstrip('#')[i:i + 2], 16) for i in (0, 2, 4))
+    used_colors.add(colors_keys[n])
+    return colors_values[n]
+
+
+def new_patch(bottom_left_corner, width, height, color):
+    return plt.Rectangle(bottom_left_corner, width, height,
+                         facecolor=color, edgecolor=None, linewidth=0.5
+                         )
+
+
+def printcluster(c, prefix=""):
+	print(prefix+"---{ cluster size: ", end="")
+	print(len(c))
+	for sc in c.children:
+		printcluster(sc, prefix=prefix+"|  ")
+	print(prefix+" }")
+
 
 """
 The old ways

@@ -11,7 +11,7 @@ operation and implementation than the V2 iteration, but serves the same
 general purpose and thus retains the name.
 """
 
-MINIMUM_MEMBERSHIP = 1000
+MINIMUM_MEMBERSHIP = 300
 
 
 class AlphaCluster:
@@ -21,9 +21,9 @@ class AlphaCluster:
 
         # members is a set/frozenset of (int) simplex indices
         self.members = set()
-        # circumradius_map is a dictionary from circumradii to simplex indices
+        # alpha_map is a dictionary from circumradii to simplex indices
         self.alpha_map = dict()
-        # circumradii is a sorted (INCREASING) numpy array of keys to circumradius_map
+        # circumradii is a sorted (INCREASING) numpy array of keys to alpha_map
         self.alphas = None
         # check if this is still mutable; should not be if it has a parent
         self.frozen = False
@@ -49,17 +49,18 @@ class AlphaCluster:
 
     def engulf(self, cluster):
         self.members |= cluster.members
-        self.alpha_map.update(cluster.circumradius_map)
+        self.alpha_map.update(cluster.alpha_map)
         self.alphas = np.concatenate([self.alphas, cluster.alphas])
         self.alphas.sort(kind='mergesort')
+        self.children += cluster.children
 
     def collapse(self):
         if not self.frozen:
             raise RuntimeError("This shape is not frozen!")
         # also passes identity to largest subcluster
-        for i, c in enumerate(self.children):
+        for i, c in enumerate(list(self.children)):
             c.collapse()
-            if (i == 0) or (len(c) < MINIMUM_MEMBERSHIP):
+            if (len(c.members) < MINIMUM_MEMBERSHIP) or (i == 0):
                 self.engulf(c)
                 self.children.remove(c)
 
