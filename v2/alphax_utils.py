@@ -237,22 +237,22 @@ Simplex volume, circumradius math stuff
 
 
 def euclidean_distance_matrix(point_array):
-	if True:
-		# absolute fastest method
-		return squareform(np.square(pdist(point_array)))
-	else:
-		# this is the old method I wrote; too many loops!!!
-		# point array is of shape (ndim + 1, ndim)
-	    n_points = point_array.shape[0]
-	    d_matrix = np.zeros((n_points, n_points), dtype=np.float64)
-	    for i in range(n_points):
-	        for j in range(n_points):
-	            if i == j:
-	                d_matrix[i, j] = 0.
-	            elif j > i:
-	                d = np.sum((point_array[i, :] - point_array[j, :]) ** 2.)
-	                d_matrix[i, j] = d_matrix[j, i] = d
-	    return d_matrix
+    if True:
+        # absolute fastest method
+        return squareform(np.square(pdist(point_array)))
+    else:
+        # this is the old method I wrote; too many loops!!!
+        # point array is of shape (ndim + 1, ndim)
+        n_points = point_array.shape[0]
+        d_matrix = np.zeros((n_points, n_points), dtype=np.float64)
+        for i in range(n_points):
+            for j in range(n_points):
+                if i == j:
+                    d_matrix[i, j] = 0.
+                elif j > i:
+                    d = np.sum((point_array[i, :] - point_array[j, :]) ** 2.)
+                    d_matrix[i, j] = d_matrix[j, i] = d
+        return d_matrix
 
 
 def cm_volume_helper(cm_det_abs_root, n):
@@ -425,11 +425,10 @@ def naive_point_grouping():
         else:
             alpha = a.alpha_range[0]
         boundary, elements = a.cluster_at_alpha(alpha)[0]
-        color = a.color
         vertices = deque()
         for b in boundary:
             vertices.append(b.coord_array())
-        plot_surfaces.append(generate_boundary_artist(vertices, color))
+        plot_surfaces.append(generate_boundary_artist(vertices, a.color))
         points = npoints_from_nsimplices(a.cluster_elements)
         points -= used_points
         used_points |= points

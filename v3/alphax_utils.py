@@ -10,130 +10,129 @@ from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.collections import LineCollection
 from AlphaCluster import MINIMUM_MEMBERSHIP
+from collections import deque
 
 
 SEED = 635541
 seed(SEED)
 
+DEFAULT_TRANSPARENCY = 0.4
+LOW_TRANSPARENCY = 0.2
+
 
 def cayley_menger_vr(simplex_array):
-	# simplex_array is of shape (nsimplices, ndim + 1, ndim)
-	# prepare distance matrix
-	nsimplices, ndim_p1 = simplex_array.shape[0:2]
-	# This will work for sets of n-x simplices embedded in dimension n with x>0
-	ndim = ndim_p1 - 1
-	d_matrix = np.empty((nsimplices, ndim_p1, ndim_p1))
-	for i in range(nsimplices):
-		d_matrix[i, :, :] = squareform(np.square(pdist(simplex_array[i, :, :])))
-	cm_matrix = np.pad(d_matrix, ((0, 0), (1, 0), (1, 0)), 'constant', constant_values=1)
-	cm_matrix[:, 0, 0] = 0.
-	cm_det_root = np.sqrt(np.abs(det(cm_matrix)))
-	volume = cm_det_root / ((2. ** (ndim/2.)) * factorial(ndim))
-	circumradius = np.sqrt(np.abs(det(d_matrix)) / 2.) / cm_det_root
-	return volume, circumradius
+    # simplex_array is of shape (nsimplices, ndim + 1, ndim)
+    # prepare distance matrix
+    nsimplices, ndim_p1 = simplex_array.shape[0:2]
+    # This will work for sets of n-x simplices embedded in dimension n with x>0
+    ndim = ndim_p1 - 1
+    d_matrix = np.empty((nsimplices, ndim_p1, ndim_p1))
+    for i in range(nsimplices):
+        d_matrix[i, :, :] = squareform(np.square(pdist(simplex_array[i, :, :])))
+    cm_matrix = np.pad(d_matrix, ((0, 0), (1, 0), (1, 0)), 'constant', constant_values=1)
+    cm_matrix[:, 0, 0] = 0.
+    cm_det_root = np.sqrt(np.abs(det(cm_matrix)))
+    volume = cm_det_root / ((2. ** (ndim/2.)) * factorial(ndim))
+    circumradius = np.sqrt(np.abs(det(d_matrix)) / 2.) / cm_det_root
+    return volume, circumradius
 
 
 def dendrogram(root):
-	"""
-	Dendrogram routine. Roughly follows v2 routine but optimized for v3.
-	"""
-	# Artificially set an alpha step for block height
-	a_step = 0.95
-	# X axis width is proportional to total number of Delaunay simplices
-	base_width = len(root)
-	# Start just prior to the first branch, if possible
-	if root.isleaf():
-		# unlikely but possible
-		first_child = root
-	else:
-		# likely that there are multiple clusters
-		first_child = max(root.children, key=lambda x: x.max_alpha())
-	# set y axis limits; will adjust lower limit as tree is traversed
-	lim_alpha_lo = lim_alpha_hi = first_child.max_alpha() / (a_step**2)
-	# start traversing with root; reference the center of the x axis & large-alpha bound
-	stack = [(root, lim_alpha_hi, base_width/2),]
-	# seems like this was for a debug print statement
-	count = 0
-	# collect patches; order doesn't matter
-	patch_stack = []
-	colors = get_color()
-	while stack:
-		count += 1
+    """
+    Dendrogram routine. Roughly follows v2 routine but optimized for v3.
+    """
+    # Artificially set an alpha step for block height
+    a_step = 0.95
+    # X axis width is proportional to total number of Delaunay simplices
+    base_width = len(root)
+    # Start just prior to the first branch, if possible
+    if root.isleaf():
+        # unlikely but possible
+        first_child = root
+    else:
+        # likely that there are multiple clusters
+        first_child = max(root.children, key=lambda x: x.max_alpha())
+    # set y axis limits; will adjust lower limit as tree is traversed
+    lim_alpha_lo = lim_alpha_hi = first_child.max_alpha() / (a_step**2)
+    # start traversing with root; reference the center of the x axis & large-alpha bound
+    stack = [(root, lim_alpha_hi, base_width/2),]
+    # seems like this was for a debug print statement
+    count = 0
+    # collect patches; order doesn't matter
+    patch_stack = []
+    colors = get_color()
+    while stack:
+        count += 1
         # msg = ".. %3d ../r" % count
         # could sys.stdout.write(that)
-		a, current_alpha, center = stack.pop()
-		current_alpha /= a_step
-		color = next(colors)
-		# if step includes fork alpha, split tree
-		fork_alphas = [sc.max_alpha() for sc in a.children]
-		# if no change in membership, don't end the patch
-		stretching_patch_upward = False
-		# current patch limits
-		start_alpha, end_alpha = None, None
-		still_iterating = True
-		while still_iterating:
-			current_alpha *= a_step
-			end_alpha = current_alpha*a_step
-			if not stretching_patch_upward:
-				start_alpha = current_alpha
-			# width from function
-			width = calc_current_width(a, current_alpha)
-			# current_forks is a list of children who should get their own block next
-			current_forks = [a.children[j] for j, x in enumerate(fork_alphas) if ((x < current_alpha) and (x >= end_alpha))]
-			if width >= MINIMUM_MEMBERSHIP and a.min_alpha() < end_alpha:
-				# if membership isn't dropping in this interval, then continue the block upwards
-				interval_width = np.searchsorted(a.alphas, [current_alpha, end_alpha]).ptp()
-				if (interval_width == 0) and not current_forks:
-					stretching_patch_upward = True
-					continue
-			else:
-				# minimum was reached, or smallest alpha in this interval
-				still_iterating = False
+        a, current_alpha, center = stack.pop()
+        current_alpha /= a_step
+        a.set_color(next(colors))
+        # if step includes fork alpha, split tree
+        fork_alphas = [sc.max_alpha() for sc in a.children]
+        # if no change in membership, don't end the patch
+        stretching_patch_upward = False
+        # current patch limits
+        start_alpha, end_alpha = None, None
+        still_iterating = True
+        while still_iterating:
+            current_alpha *= a_step
+            end_alpha = current_alpha*a_step
+            if not stretching_patch_upward:
+                start_alpha = current_alpha
+            # width from function
+            width = calc_current_width(a, current_alpha)
+            # current_forks is a list of children who should get their own block next
+            current_forks = [a.children[j] for j, x in enumerate(fork_alphas) if ((x < current_alpha) and (x >= end_alpha))]
+            if width >= MINIMUM_MEMBERSHIP and a.min_alpha() < end_alpha:
+                # if membership isn't dropping in this interval, then continue the block upwards
+                interval_width = np.searchsorted(a.alphas, [current_alpha, end_alpha]).ptp()
+                if (interval_width == 0) and not current_forks:
+                    stretching_patch_upward = True
+                    continue
+            else:
+                # minimum was reached, or smallest alpha in this interval
+                still_iterating = False
 
-			true_left_edge = center - width / 2
-			if true_left_edge < 1:
-				print("HEY")
-				print(">>", current_forks)
-				print(">>", )
-			patch_stack.append(new_patch((true_left_edge, end_alpha), width, start_alpha - end_alpha, color))
-			stretching_patch_upward = False
-			if current_forks:
-				# add up length of fork children in this interval
-				total_new_width = float(sum(len(sc) for sc in current_forks))
-				# add on the next iteration width of this cluster
-				total_new_width += calc_current_width(a, end_alpha)
-				# left edge of this block
-				left_edge = 0
-				for sc in [a]+current_forks:
-					size = len(sc) if sc != a else calc_current_width(a, end_alpha)
-					fractional_width = size / total_new_width
-					new_centroid = (left_edge + fractional_width/2)*width + true_left_edge
-					left_edge += fractional_width
-					if sc == a:
-						center = new_centroid
-					else:
-						stack.append((sc, end_alpha, new_centroid))
-		if end_alpha < lim_alpha_lo:
-			lim_alpha_lo = end_alpha
-	return patch_stack, base_width, (lim_alpha_lo, lim_alpha_hi)
+            true_left_edge = center - width / 2
+            patch_stack.append(new_rect_patch((true_left_edge, end_alpha), width, start_alpha - end_alpha, a.get_color()))
+            stretching_patch_upward = False
+            if current_forks:
+                # add up length of fork children in this interval
+                total_new_width = float(sum(len(sc) for sc in current_forks))
+                # add on the next iteration width of this cluster
+                total_new_width += calc_current_width(a, end_alpha)
+                # left edge of this block
+                left_edge = 0
+                for sc in [a]+current_forks:
+                    size = len(sc) if sc != a else calc_current_width(a, end_alpha)
+                    fractional_width = size / total_new_width
+                    new_centroid = (left_edge + fractional_width/2)*width + true_left_edge
+                    left_edge += fractional_width
+                    if sc == a:
+                        center = new_centroid
+                    else:
+                        stack.append((sc, end_alpha, new_centroid))
+        if end_alpha < lim_alpha_lo:
+            lim_alpha_lo = end_alpha
+    return patch_stack, base_width, (lim_alpha_lo, lim_alpha_hi)
 
 
 def calc_current_width(current_cluster, current_alpha):
-	# sum up all the exceptions to width
-	# first, the simplices unique to this cluster that are too large
-	# searchsorted gives index in increasing sorted; if index is len(alphas), we want 0 exceptions
-	not_width = len(current_cluster.alphas) - np.searchsorted(current_cluster.alphas, current_alpha)
-	# second, sum up exceptions from clusters that have already branched off
-	not_width += sum(len(sc) for sc in current_cluster.children if sc.max_alpha() >= current_alpha)
-	return len(current_cluster) - not_width
+    # sum up all the exceptions to width
+    # first, the simplices unique to this cluster that are too large
+    # searchsorted gives index in increasing sorted; if index is len(alphas), we want 0 exceptions
+    not_width = len(current_cluster.alphas) - np.searchsorted(current_cluster.alphas, current_alpha)
+    # second, sum up exceptions from clusters that have already branched off
+    not_width += sum(len(sc) for sc in current_cluster.children if sc.max_alpha() >= current_alpha)
+    return len(current_cluster) - not_width
 
 def get_color():
-	color_dict = get_colors()
-	used_colors = set()
-	while True:
-		c = rand_color(color_dict, used_colors)
-		yield c
-
+    color_dict = get_colors()
+    used_colors = set()
+    while True:
+        c = rand_color(color_dict, used_colors)
+        yield c
 
 
 def get_colors():
@@ -159,18 +158,115 @@ def rand_color(c_dict, used_colors):
     return colors_values[n]
 
 
-def new_patch(bottom_left_corner, width, height, color):
+def new_rect_patch(bottom_left_corner, width, height, color):
     return plt.Rectangle(bottom_left_corner, width, height,
-                         facecolor=color, edgecolor=None, linewidth=0.5
+                         facecolor=color, edgecolor=None, linewidth=0.5,
+                         alpha=0.9
                          )
 
 
+def naive_point_grouping(root, dkey):
+    # stack is guaranteed to have parents first
+    stack = depth_first_search(root)
+    plot_surfaces, plot_points = [], []
+    used_points = set()
+    for a in stack:
+        if a == root:
+            if a.isleaf():
+                # for a lone root, use geometric mean of alpha range
+                alpha = np.sqrt(a.min_alpha() * a.max_alpha())
+            else:
+                # for the root, use alpha of last branch
+                alpha = min(sc.max_alpha() for sc in a.children)
+        else:
+            # not root; just some subcluster
+            alpha = a.alphas[2*(len(a.alphas)//4)]
+        # points may share vertices with subclusters
+        points, boundary = a.cluster_at_alpha(alpha, dkey)
+        plot_surfaces.append(generate_boundary_artist(boundary, a.get_color()))
+        # keep track of the points that are assigned to smaller clusters
+        points -= used_points
+        used_points |= points
+        plot_points.append((tuple(zip(*points)), a.get_color(), DEFAULT_TRANSPARENCY))
+    return plot_surfaces, plot_points
+
+
+def alpha_surfaces(root, alpha):
+    plot_surfaces, plot_points = [], []
+    clusters = None
+    pass # TODO: implement this
+
+
+def generate_boundary_artist(vertices, color):
+    ndim = len(next(iter(vertices[0])))
+    vertices = map(tuple, vertices)
+    if ndim == 2:
+        artist = LineCollection(vertices)
+        artist.set_color(color)
+        artist.set_linewidth(2.5)
+    elif ndim == 3:
+        artist = Poly3DCollection(vertices, linewidth=1)
+        # transparency alpha must be set BEFORE face/edge color
+        artist.set_alpha(0.5)
+        artist.set_facecolor(color)
+        artist.set_edgecolor('k')
+    else:
+        raise ValueError("{:d} dimensions needs special attention for plotting".format(ndim))
+    return artist
+
+
+def prepare_plots(figure, ndim):
+    plt.figure(figure.number)
+    if ndim == 2:
+        dendrogram_params = ((5, 6), (2, 4))
+        main_params = ((5, 6), (0, 0))
+        d_c, d_r = 2, 3
+        m_c, m_r = 4, 5
+        projection = "rectilinear"
+    elif ndim == 3:
+        dendrogram_params = ((2, 4), (1, 3))
+        main_params = ((2, 4), (0, 0))
+        d_c, d_r = 1, 1
+        m_c, m_r = 3, 2
+        projection = "3d"
+    else:
+        raise ValueError("{:d} dimensions needs special attention for plotting.".format(int(ndim)))
+    dendrogram_ax = plt.subplot2grid(*dendrogram_params, colspan=d_c, rowspan=d_r)
+    main_ax = plt.subplot2grid(*main_params, colspan=m_c, rowspan=m_r, projection=projection)
+    if ndim == 3:
+        surface_plotter = main_ax.add_collection3d
+    elif ndim == 2:
+        surface_plotter = main_ax.add_artist
+    else:
+        raise ValueError("{:d} dimensions needs special attention for plotting.".format(int(ndim)))
+    return dendrogram_ax, main_ax, surface_plotter
+
+
+def depth_first_search(c, f=None, p=None):
+    # Return list of clusters under and including c
+    # List order is depth-first; order of sibling branches is arbitrary
+    #  Children are guaranteed to show up after their parents. That's all.
+    # If function f is present, makes a list of the result of that function
+    #  instead of a list of clusters
+    # Can call a function p on every cluster as well, but ignores output
+    dfs_children = deque()
+    for sc in c.children:
+        dfs_children.extend(depth_first_search(sc))
+    if p is not None:
+        p(c)
+    if f is not None:
+        dfs_children.appendleft(f(c))
+    else:
+        dfs_children.appendleft(c)
+    return dfs_children
+
+
 def printcluster(c, prefix=""):
-	print(prefix+"---{ cluster size: ", end="")
-	print(len(c))
-	for sc in c.children:
-		printcluster(sc, prefix=prefix+"|  ")
-	print(prefix+" }")
+    print(prefix+"---{ cluster size: ", end="")
+    print(len(c))
+    for sc in c.children:
+        printcluster(sc, prefix=prefix+"|  ")
+    print(prefix+" }")
 
 
 """
@@ -178,8 +274,8 @@ The old ways
 """
 
 def OLD_euclidean_distance_matrix(point_array):
-	# this is the old method I wrote; too many loops!!!
-	# point array is of shape (ndim + 1, ndim)
+    # this is the old method I wrote; too many loops!!!
+    # point array is of shape (ndim + 1, ndim)
     n_points = point_array.shape[0]
     d_matrix = np.zeros((n_points, n_points), dtype=np.float64)
     for i in range(n_points):
