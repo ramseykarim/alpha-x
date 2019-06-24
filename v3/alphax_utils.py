@@ -12,7 +12,6 @@ from matplotlib.collections import LineCollection
 from AlphaCluster import MINIMUM_MEMBERSHIP
 from collections import deque
 
-
 SEED = 635541
 seed(SEED)
 
@@ -199,13 +198,17 @@ def alpha_surfaces(root, alpha):
 
 def generate_boundary_artist(vertices, color):
     ndim = len(next(iter(vertices[0])))
-    vertices = map(tuple, vertices)
+    vertices = tuple(map(tuple, vertices))
     if ndim == 2:
         artist = LineCollection(vertices)
         artist.set_color(color)
         artist.set_linewidth(2.5)
     elif ndim == 3:
-        artist = Poly3DCollection(vertices, linewidth=1)
+        try:
+            artist = Poly3DCollection(vertices, linewidth=1)
+        except Exception as e:
+            print(f"---> exception raised: {e.__class__.__name__} {e}")
+            import pdb; pdb.set_trace()
         # transparency alpha must be set BEFORE face/edge color
         artist.set_alpha(0.5)
         artist.set_facecolor(color)

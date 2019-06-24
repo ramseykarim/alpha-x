@@ -9,7 +9,7 @@ import AlphaCluster as alphac
 import pickle
 
 def get_test_data():
-    srcfile = "../../PyAlpha_drafting/test_data/Ssets/s4.txt"
+    srcfile = "../../PyAlpha_drafting/test_data/Ssets/s1.txt"
     # srcfile = "../../PyAlpha_drafting/test_data/filament5500_sampleNH2_betah1.80.dat"
     points = np.genfromtxt(srcfile)
     return points
@@ -181,8 +181,10 @@ def test_AlphaCluster():
         included = set(n.root for n in neighbors if n is not None)
         # circumradius of this simplex
         cr = cr_array[simp_idx]
+        # SHOULD STREAMLINE / REWRITE THIS LOGIC
         if len(included) == 0:
             # simplex is isolated
+            # TODO: initialize AlphaCluster WITHOUT simpidx, add as last step
             assigned_cluster = alphac.AlphaCluster(simp_idx, cr)
         elif len(included) == 1:
             # simplex borders exactly one existing cluster
@@ -190,12 +192,32 @@ def test_AlphaCluster():
             assigned_cluster.add(simp_idx, cr)
         else:
             # included in 2 or more clusters
-            assigned_cluster = alphac.AlphaCluster(simp_idx, cr, *included)
+            # add simplex to the largest cluster, make the others children of it
+            assigned_cluster = max(included, key=len)
+            included.remove(assigned_cluster)
+            if any(len(x) < alphac.MINIMUM_MEMBERSHIP for x in included):
+                # some clusters need to be absorbed
+                # get smallest clusters
+                too_small_clusters = [x for x in included if len(x) < alphac.MINIMUM_MEMBERSHIP]
+                for small_cluster in too_small_clusters:
+                    # incorporate into the largest cluster
+                    assigned_cluster.engulf(small_cluster)
+                    assert small_cluster.isleaf() # should be too small to have children
+                    # reassign simp_lookup to largest cluster
+                    for m in small_cluster.members:
+                        simp_lookup[m] = assigned_cluster
+                    # remove from included list
+                    included.remove(small_cluster)
+                # included should be empty UNLESS both largest cluster & remaining clusters
+                #  are large enough; in this case, add remaining clusters as children
+            for other_cluster in included:
+                assigned_cluster.add_child(other_cluster)
+            assigned_cluster.add(simp_idx, cr)
         simp_lookup[simp_idx] = assigned_cluster
     clusters = set(simp_lookup)
     root = simp_lookup[0].root
     root.freeze(root)
-    root.collapse()
+    # root.collapse()
 
     fig = plt.figure()
     d_ax, m_ax, surface_plotter = utils.prepare_plots(fig, ndim)

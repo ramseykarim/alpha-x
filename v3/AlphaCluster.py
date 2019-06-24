@@ -50,11 +50,19 @@ class AlphaCluster:
         self.size += 1
         self.alpha_map[circumradius] = item
 
+    def add_child(self, cluster):
+        self.size += cluster.size
+        self.children.append(cluster)
+        cluster.freeze(self)
+
     def engulf(self, cluster):
         self.members |= cluster.members
         self.alpha_map.update(cluster.alpha_map)
-        self.alphas = np.concatenate([self.alphas, cluster.alphas])
-        self.alphas.sort(kind='mergesort')
+        if self.frozen and cluster.frozen:
+            self.alphas = np.concatenate([self.alphas, cluster.alphas])
+            self.alphas.sort(kind='mergesort')
+        if cluster not in self.children:
+            self.size += cluster.size
         self.children += cluster.children
 
     def collapse(self):
