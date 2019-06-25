@@ -167,57 +167,53 @@ def test_AlphaCluster():
     Testing ground for structure of cluster code
     Uses AlphaCluster objects
     """
-    p = get_sco_ob()
+    p = get_test_data()
     tri = Delaunay(p)
     ndim = p.shape[1]
     triangle_coords = p[tri.simplices, :]
     cr_array, vol_array = utils.cayley_menger_vr(triangle_coords)
     simp_sorted_idxs = np.argsort(cr_array)
     simp_lookup = [None]*tri.simplices.shape[0]
+
     for simp_idx in simp_sorted_idxs:
-        # all neighbors of this simplex
-        neighbors = [simp_lookup[n_idx] for n_idx in tri.neighbors[simp_idx]]
+        if -1 in tri.neighbors[simp_idx]:
+            # do not involve edge simplices
+            continue
+        # all neighboring clusters of this simplex
+        neighbors = (simp_lookup[n_idx] for n_idx in tri.neighbors[simp_idx])
         # included if already counted by some cluster
         included = set(n.root for n in neighbors if n is not None)
         # circumradius of this simplex
         cr = cr_array[simp_idx]
-        # SHOULD STREAMLINE / REWRITE THIS LOGIC
         if len(included) == 0:
             # simplex is isolated
-            # TODO: initialize AlphaCluster WITHOUT simpidx, add as last step
-            assigned_cluster = alphac.AlphaCluster(simp_idx, cr)
-        elif len(included) == 1:
-            # simplex borders exactly one existing cluster
-            assigned_cluster = included.pop()
-            assigned_cluster.add(simp_idx, cr)
+            assigned_cluster = alphac.AlphaCluster()
         else:
-            # included in 2 or more clusters
-            # add simplex to the largest cluster, make the others children of it
+            # included in at least 1 cluster (assigned to largest/only cluster)
             assigned_cluster = max(included, key=len)
             included.remove(assigned_cluster)
             if any(len(x) < alphac.MINIMUM_MEMBERSHIP for x in included):
-                # some clusters need to be absorbed
-                # get smallest clusters
+                # some small clusters need to be absorbed
                 too_small_clusters = [x for x in included if len(x) < alphac.MINIMUM_MEMBERSHIP]
                 for small_cluster in too_small_clusters:
-                    # incorporate into the largest cluster
                     assigned_cluster.engulf(small_cluster)
-                    assert small_cluster.isleaf() # should be too small to have children
-                    # reassign simp_lookup to largest cluster
+                    assert small_cluster.isleaf()
                     for m in small_cluster.members:
                         simp_lookup[m] = assigned_cluster
-                    # remove from included list
                     included.remove(small_cluster)
-                # included should be empty UNLESS both largest cluster & remaining clusters
-                #  are large enough; in this case, add remaining clusters as children
+            # for clusters that are large enough, add as children
             for other_cluster in included:
                 assigned_cluster.add_child(other_cluster)
-            assigned_cluster.add(simp_idx, cr)
+        # add this simplex to its assigned cluster
+        assigned_cluster.add(simp_idx, cr)
         simp_lookup[simp_idx] = assigned_cluster
-    clusters = set(simp_lookup)
-    root = simp_lookup[0].root
+    # all simplices should have the same root
+    clusters = set(x.root for x in simp_lookup if x)
+    root = max(clusters, key=len)
+    clusters.remove(root)
+    print("JOINING {} CLUSTERS".format(len(clusters)))
+    root.add_all_children(clusters)
     root.freeze(root)
-    # root.collapse()
 
     fig = plt.figure()
     d_ax, m_ax, surface_plotter = utils.prepare_plots(fig, ndim)
@@ -236,6 +232,8 @@ def test_AlphaCluster():
         surface_plotter(s)
     for points, color, opacity in points_list:
         m_ax.plot(*points, marker='.', color=color, alpha=opacity, linestyle='None', markersize=1)
+    # for setter, i in zip((m_ax.set_xlim, m_ax.set_ylim, m_ax.set_zlim), range(3)):
+    #     setter(np.sort(p[:, i])[(0, -1),])
     plt.show()
     return root
 

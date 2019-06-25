@@ -42,8 +42,6 @@ def dendrogram(root):
     """
     # Artificially set an alpha step for block height
     a_step = 0.95
-    # X axis width is proportional to total number of Delaunay simplices
-    base_width = len(root)
     # Start just prior to the first branch, if possible
     if root.isleaf():
         # unlikely but possible
@@ -53,6 +51,8 @@ def dendrogram(root):
         first_child = max(root.children, key=lambda x: x.max_alpha())
     # set y axis limits; will adjust lower limit as tree is traversed
     lim_alpha_lo = lim_alpha_hi = first_child.max_alpha() / (a_step**2)
+    # X axis width is proportional to # simplices at this alpha
+    base_width = root.width_less_than(lim_alpha_lo)
     # start traversing with root; reference the center of the x axis & large-alpha bound
     stack = [(root, lim_alpha_hi, base_width/2),]
     # seems like this was for a debug print statement
@@ -65,6 +65,7 @@ def dendrogram(root):
         # msg = ".. %3d ../r" % count
         # could sys.stdout.write(that)
         a, current_alpha, center = stack.pop()
+        # it will get stepped forward immediately, so step it back
         current_alpha /= a_step
         a.set_color(next(colors))
         # if step includes fork alpha, split tree
@@ -74,25 +75,28 @@ def dendrogram(root):
         # current patch limits
         start_alpha, end_alpha = None, None
         still_iterating = True
+        width, last_width = None, np.inf
         while still_iterating:
             current_alpha *= a_step
             end_alpha = current_alpha*a_step
             if not stretching_patch_upward:
                 start_alpha = current_alpha
             # width from function
-            width = calc_current_width(a, current_alpha)
+            width = a.width_less_than(current_alpha)
+            if not (width <= last_width):
+                import pdb; pdb.set_trace()
             # current_forks is a list of children who should get their own block next
             current_forks = [a.children[j] for j, x in enumerate(fork_alphas) if ((x < current_alpha) and (x >= end_alpha))]
             if width >= MINIMUM_MEMBERSHIP and a.min_alpha() < end_alpha:
                 # if membership isn't dropping in this interval, then continue the block upwards
-                interval_width = np.searchsorted(a.alphas, [current_alpha, end_alpha]).ptp()
+                interval_width = a.width_less_than(current_alpha) - a.width_less_than(end_alpha)
                 if (interval_width == 0) and not current_forks:
+                    # I checked that this feature works!
                     stretching_patch_upward = True
                     continue
             else:
                 # minimum was reached, or smallest alpha in this interval
                 still_iterating = False
-
             true_left_edge = center - width / 2
             patch_stack.append(new_rect_patch((true_left_edge, end_alpha), width, start_alpha - end_alpha, a.get_color()))
             stretching_patch_upward = False
@@ -100,11 +104,12 @@ def dendrogram(root):
                 # add up length of fork children in this interval
                 total_new_width = float(sum(len(sc) for sc in current_forks))
                 # add on the next iteration width of this cluster
-                total_new_width += calc_current_width(a, end_alpha)
+                total_new_width += a.width_less_than(end_alpha)
+                # import pdb; pdb.set_trace()
                 # left edge of this block
                 left_edge = 0
                 for sc in [a]+current_forks:
-                    size = len(sc) if sc != a else calc_current_width(a, end_alpha)
+                    size = len(sc) if sc != a else a.width_less_than(end_alpha)
                     fractional_width = size / total_new_width
                     new_centroid = (left_edge + fractional_width/2)*width + true_left_edge
                     left_edge += fractional_width
@@ -112,19 +117,11 @@ def dendrogram(root):
                         center = new_centroid
                     else:
                         stack.append((sc, end_alpha, new_centroid))
+            last_width = width
         if end_alpha < lim_alpha_lo:
             lim_alpha_lo = end_alpha
     return patch_stack, base_width, (lim_alpha_lo, lim_alpha_hi)
 
-
-def calc_current_width(current_cluster, current_alpha):
-    # sum up all the exceptions to width
-    # first, the simplices unique to this cluster that are too large
-    # searchsorted gives index in increasing sorted; if index is len(alphas), we want 0 exceptions
-    not_width = len(current_cluster.alphas) - np.searchsorted(current_cluster.alphas, current_alpha)
-    # second, sum up exceptions from clusters that have already branched off
-    not_width += sum(len(sc) for sc in current_cluster.children if sc.max_alpha() >= current_alpha)
-    return len(current_cluster) - not_width
 
 def get_color():
     color_dict = get_colors()
@@ -179,7 +176,7 @@ def naive_point_grouping(root, dkey):
                 alpha = min(sc.max_alpha() for sc in a.children)
         else:
             # not root; just some subcluster
-            alpha = a.alphas[2*(len(a.alphas)//4)]
+            alpha = a.alphas_main[2*(len(a.alphas_main)//4)]
         # points may share vertices with subclusters
         points, boundary = a.cluster_at_alpha(alpha, dkey)
         plot_surfaces.append(generate_boundary_artist(boundary, a.get_color()))

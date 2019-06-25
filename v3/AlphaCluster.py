@@ -16,16 +16,19 @@ MINIMUM_MEMBERSHIP = 300
 
 
 class AlphaCluster:
-    def __init__(self, joint_simplex, circumradius, *children):
-        # init with the (index of the) simplex that brought the children
-        # together, as well as that simplex's circumradius
+    def __init__(self):
+        # init with no arguments; empty cluster
 
         # members is a set/frozenset of (int) simplex indices
         self.members = set()
         # alpha_map is a dictionary from circumradii to simplex indices
         self.alpha_map = dict()
-        # circumradii is a sorted (INCREASING) numpy array of keys to alpha_map
+        # alphas is a sorted (INCREASING) numpy array of keys to alpha_map
         self.alphas = None
+        # size_map has same keys as alpha_map but maps to the size when key was largest shape
+        self.size_map = dict()
+        # alphas_main is a sorted (INCREASING) numpy array of keys to size_map
+        self.alphas_main = None
         # check if this is still mutable; should not be if it has a parent
         self.frozen = False
         # the top-level parent node of this cluster
@@ -34,12 +37,9 @@ class AlphaCluster:
         self.color = None
         # children is a short (2-3 item) list of AlphaCluster objects
         # The 0th index of children contains the largest child cluster
-        self.children = AlphaCluster.set_children(list(children))
+        self.children = []
         # size is the number of members contained in+below this object
-        self.size = sum(len(x) for x in self.children)
-        for c in self.children:
-            c.freeze(self)
-        self.add(joint_simplex, circumradius)
+        self.size = 0
 
     def add(self, item, circumradius):
         if self.frozen:
@@ -49,31 +49,31 @@ class AlphaCluster:
         self.members.add(item)
         self.size += 1
         self.alpha_map[circumradius] = item
+        if circumradius in self.size_map:
+            raise IndexError("DUPLICATE circumradius!!!!!!!!!!")
+        self.size_map[circumradius] = self.size
 
     def add_child(self, cluster):
         self.size += cluster.size
         self.children.append(cluster)
         cluster.freeze(self)
 
+    def add_all_children(self, clusters):
+        for c in clusters:
+            self.add_child(c)
+
     def engulf(self, cluster):
         self.members |= cluster.members
         self.alpha_map.update(cluster.alpha_map)
-        if self.frozen and cluster.frozen:
-            self.alphas = np.concatenate([self.alphas, cluster.alphas])
-            self.alphas.sort(kind='mergesort')
         if cluster not in self.children:
             self.size += cluster.size
+        else:
+            raise RuntimeWarning("ENGULF: why is this happening? (children)")
         self.children += cluster.children
+        # should extend this to updating simp_lookup
 
     def collapse(self):
-        if not self.frozen:
-            raise RuntimeError("This shape is not frozen!")
-        # also passes identity to largest subcluster
-        for i, c in enumerate(list(self.children)):
-            c.collapse()
-            if (len(c.members) < MINIMUM_MEMBERSHIP) or (i == 0):
-                self.engulf(c)
-                self.children.remove(c)
+        raise NotImplementedError("collapse is obsolete!")
 
     def freeze(self, parent):
         if self.frozen:
@@ -81,6 +81,7 @@ class AlphaCluster:
         self.frozen = True
         self.members = frozenset(self.members)
         self.alphas = np.array(sorted(self.alpha_map.keys()))
+        self.alphas_main = np.array(sorted(self.size_map.keys()))
         self.set_root(parent)
 
     def set_root(self, root):
@@ -89,6 +90,7 @@ class AlphaCluster:
             c.set_root(root)
 
     def set_color(self, color):
+        assert self.frozen
         if self.color is not None:
             raise RuntimeError("Color of {:s} is already set!".format(str(self)))
         self.color = color
@@ -109,28 +111,46 @@ class AlphaCluster:
         return (not self.children)
 
     def min_alpha(self):
-        return self.alphas[0]
+        return self.alphas_main[0]
 
     def max_alpha(self):
-        return self.alphas[-1]
+        return self.alphas_main[-1]
 
-    def get_smaller_than(self, alpha, recursive=False):
+    def width_less_than(self, alpha):
+        if not self.frozen:
+            raise RuntimeWarning("width_less_than: this is inefficient!")
+        idx = np.searchsorted(self.alphas_main, alpha, side='left')
+        if idx == 0:
+            return 0
+        last_alpha = self.alphas_main[idx-1]
+        assert last_alpha <= alpha
+        if idx == len(self.alphas_main):
+            size = self.size
+        else:
+            size = self.size_map[last_alpha]
+        children_in_interval = [sc for sc in self.children if last_alpha <= sc.max_alpha() < alpha]
+        # if children_in_interval:
+        #     import pdb; pdb.set_trace()
+        for sc in children_in_interval:
+            size += len(sc)
+        return size
+
+    def get_smaller_than(self, alpha):
         # returns tuple of member indices
         #  belonging to members with CRs smaller than alpha
         member_indices = [self.alpha_map[cr] for cr in self.alphas[:np.searchsorted(self.alphas, alpha, side='right')]]
-        if recursive:
-            # also get anything under this
-            member_indices.extend(sum((sc.get_smaller_than(alpha, recursive=recursive) for sc in self.children), []))
+        # also get anything under this as long as the cluster is included at this alpha
+        member_indices.extend(sum((sc.get_smaller_than(alpha) for sc in self.children if sc.max_alpha() < alpha), []))
         return member_indices
 
     def __repr__(self):
         s = "{:d}/{:d}".format(len(self.members), self.size)
         if self.frozen:
-            t = "{:.2E}/{:.2E}".format(self.alphas[-1], self.alphas[0])
+            t = "{:.2E}/{:.2E}".format(self.alphas_main[-1], self.alphas_main[0])
         else:
-            t = "::/{:.2E}".format(min(self.alpha_map.keys()))
+            t = "::/{:.2E}".format(min(self.size_map.keys()))
         if self.color is not None:
-            c = str(color)
+            c = str(self.color)
         else:
             c = ""
         return "AlphaCluster({:s}|{:s}|{:s})".format(s, t, c)
@@ -138,7 +158,7 @@ class AlphaCluster:
     def __str__(self):
         return self.__repr__()
 
-    def cluster_at_alpha(self, alpha, dkey, subclusters=False):
+    def cluster_at_alpha(self, alpha, dkey):
         assert self.min_alpha() <= alpha <= self.max_alpha()
         # TODO: need boundary traverse to do it properly
         #   for boundary traverse, make sure to look up vertex_neighbor_vertices, neighbors
@@ -149,7 +169,7 @@ class AlphaCluster:
         # spawn off tuples of all vertices but one; x should be part of range(nv)
         iterface = lambda x: tuple(j for j in range(nv) if j!=x)
         # from alpha, get slice of CRs <= alpha and, via alpha_map dict, get simplex indices
-        members = self.get_smaller_than(alpha, recursive=subclusters)
+        members = AlphaCluster.traverse(self.get_smaller_than(alpha), dkey)
         # grab the points associated with simplices
         points = dkey.points[dkey.simplices[members, :], :]
         points = set().union(*(map(tuple, m) for m in points))
@@ -169,12 +189,25 @@ class AlphaCluster:
         return points, boundary_faces
 
     @staticmethod
-    def set_children(children):
-        if not children:
-            # Leaf node
-            return []
+    def traverse(simplices, dkey, largest=True):
+        # traverse tests connectivity of simplices
+        # it's like a boiled down version of the entire code, but no children
+        # simplices is a sequence of simplex indices
+        clusters = []
+        remaining_simplices = set(simplices)
+        while remaining_simplices:
+            # if something is in traversal_stack, it is NOT in remaining_simplices
+            traversal_stack = []
+            traversal_stack.append(remaining_simplices.pop())
+            cluster = []
+            for simp_idx in traversal_stack:
+                for n in dkey.neighbors[simp_idx]:
+                    if (n in remaining_simplices) and (n > -1):
+                        traversal_stack.append(n)
+                        remaining_simplices.remove(n)
+                cluster.append(simp_idx)
+            clusters.append(cluster)
+        if largest:
+            return max(clusters, key=len)
         else:
-            # sets the largest subcluster as the 0th index child
-            lc_i = max(range(len(children)), key=lambda x: len(children[x]))
-            largest_child = children.pop(lc_i)
-            return [largest_child] + children
+            return clusters
