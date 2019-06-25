@@ -46,11 +46,12 @@ def dendrogram(root):
     if root.isleaf():
         # unlikely but possible
         first_child = root
+        # set y axis limits; will adjust lower limit as tree is traversed
+        lim_alpha_lo = lim_alpha_hi = root.max_alpha() / (a_step**2)
     else:
         # likely that there are multiple clusters
-        first_child = max(root.children, key=lambda x: x.max_alpha())
-    # set y axis limits; will adjust lower limit as tree is traversed
-    lim_alpha_lo = lim_alpha_hi = first_child.max_alpha() / (a_step**2)
+        first_child = max(root.children, key=root.children.get)
+        lim_alpha_lo = lim_alpha_hi = root.children[first_child] / (a_step**2)
     # X axis width is proportional to # simplices at this alpha
     base_width = root.width_less_than(lim_alpha_lo)
     # start traversing with root; reference the center of the x axis & large-alpha bound
@@ -68,14 +69,11 @@ def dendrogram(root):
         # it will get stepped forward immediately, so step it back
         current_alpha /= a_step
         a.set_color(next(colors))
-        # if step includes fork alpha, split tree
-        fork_alphas = [sc.max_alpha() for sc in a.children]
         # if no change in membership, don't end the patch
         stretching_patch_upward = False
         # current patch limits
         start_alpha, end_alpha = None, None
         still_iterating = True
-        width, last_width = None, np.inf
         while still_iterating:
             current_alpha *= a_step
             end_alpha = current_alpha*a_step
@@ -83,10 +81,9 @@ def dendrogram(root):
                 start_alpha = current_alpha
             # width from function
             width = a.width_less_than(current_alpha)
-            if not (width <= last_width):
-                import pdb; pdb.set_trace()
             # current_forks is a list of children who should get their own block next
-            current_forks = [a.children[j] for j, x in enumerate(fork_alphas) if ((x < current_alpha) and (x >= end_alpha))]
+            current_forks = [sc for sc in a.children if end_alpha <= a.children[sc] < current_alpha]
+            # current_forks = [a.children[j] for j, x in enumerate(fork_alphas) if ((x < current_alpha) and (x >= end_alpha))]
             if width >= MINIMUM_MEMBERSHIP and a.min_alpha() < end_alpha:
                 # if membership isn't dropping in this interval, then continue the block upwards
                 interval_width = a.width_less_than(current_alpha) - a.width_less_than(end_alpha)
@@ -117,7 +114,6 @@ def dendrogram(root):
                         center = new_centroid
                     else:
                         stack.append((sc, end_alpha, new_centroid))
-            last_width = width
         if end_alpha < lim_alpha_lo:
             lim_alpha_lo = end_alpha
     return patch_stack, base_width, (lim_alpha_lo, lim_alpha_hi)
@@ -173,7 +169,7 @@ def naive_point_grouping(root, dkey):
                 alpha = np.sqrt(a.min_alpha() * a.max_alpha())
             else:
                 # for the root, use alpha of last branch
-                alpha = min(sc.max_alpha() for sc in a.children)
+                alpha = min(a.children[sc] for sc in a.children)
         else:
             # not root; just some subcluster
             alpha = a.alphas_main[2*(len(a.alphas_main)//4)]
@@ -201,11 +197,7 @@ def generate_boundary_artist(vertices, color):
         artist.set_color(color)
         artist.set_linewidth(2.5)
     elif ndim == 3:
-        try:
-            artist = Poly3DCollection(vertices, linewidth=1)
-        except Exception as e:
-            print(f"---> exception raised: {e.__class__.__name__} {e}")
-            import pdb; pdb.set_trace()
+        artist = Poly3DCollection(vertices, linewidth=1)
         # transparency alpha must be set BEFORE face/edge color
         artist.set_alpha(0.5)
         artist.set_facecolor(color)

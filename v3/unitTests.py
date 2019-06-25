@@ -9,11 +9,16 @@ import AlphaCluster as alphac
 import pickle
 
 def get_test_data():
-    srcfile = "../../PyAlpha_drafting/test_data/Ssets/s1.txt"
+    srcfile = "../../PyAlpha_drafting/test_data/Ssets/s4.txt"
     # srcfile = "../../PyAlpha_drafting/test_data/filament5500_sampleNH2_betah1.80.dat"
     points = np.genfromtxt(srcfile)
     return points
 
+def get_my_data():
+    srcfile = "/home/ramsey/Documents/Research/Filaments/helpss/MantiPython/emcee_imgs/samples1_00.pkl"
+    with open(srcfile, 'rb') as handle:
+        d = pickle.load(handle)
+    return d
 
 def get_sco_ob():
     # RAW:
@@ -167,7 +172,12 @@ def test_AlphaCluster():
     Testing ground for structure of cluster code
     Uses AlphaCluster objects
     """
-    p = get_test_data()
+    p = get_my_data()
+    print(p.shape)
+    return
+    # plt.plot(p[:, 0], p[:, 1], '.')
+    # plt.show()
+    # return
     tri = Delaunay(p)
     ndim = p.shape[1]
     triangle_coords = p[tri.simplices, :]
@@ -202,8 +212,7 @@ def test_AlphaCluster():
                         simp_lookup[m] = assigned_cluster
                     included.remove(small_cluster)
             # for clusters that are large enough, add as children
-            for other_cluster in included:
-                assigned_cluster.add_child(other_cluster)
+            assigned_cluster.add_all_children(included, cr)
         # add this simplex to its assigned cluster
         assigned_cluster.add(simp_idx, cr)
         simp_lookup[simp_idx] = assigned_cluster
@@ -212,7 +221,7 @@ def test_AlphaCluster():
     root = max(clusters, key=len)
     clusters.remove(root)
     print("JOINING {} CLUSTERS".format(len(clusters)))
-    root.add_all_children(clusters)
+    root.add_all_children(clusters, max(max(x.alpha_map.keys()) for x in list(clusters)+[root]))
     root.freeze(root)
 
     fig = plt.figure()
@@ -232,6 +241,9 @@ def test_AlphaCluster():
         surface_plotter(s)
     for points, color, opacity in points_list:
         m_ax.plot(*points, marker='.', color=color, alpha=opacity, linestyle='None', markersize=1)
+    m_ax.set_xlim([4., 16])
+    m_ax.set_ylim([21, 22])
+    m_ax.set_zlim([20, 22])
     # for setter, i in zip((m_ax.set_xlim, m_ax.set_ylim, m_ax.set_zlim), range(3)):
     #     setter(np.sort(p[:, i])[(0, -1),])
     plt.show()

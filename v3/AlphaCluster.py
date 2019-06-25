@@ -12,7 +12,7 @@ operation and implementation than the V2 iteration, but serves the same
 general purpose and thus retains the name.
 """
 
-MINIMUM_MEMBERSHIP = 300
+MINIMUM_MEMBERSHIP = 1000
 
 
 class AlphaCluster:
@@ -35,9 +35,9 @@ class AlphaCluster:
         self.root = self
         # color variable that will be used by DENDROGRAM
         self.color = None
-        # children is a short (2-3 item) list of AlphaCluster objects
-        # The 0th index of children contains the largest child cluster
-        self.children = []
+        # children is a short (2-3 item) map of AlphaCluster object keys
+        # the values are the circumradii at which the clusters merged
+        self.children = dict()
         # size is the number of members contained in+below this object
         self.size = 0
 
@@ -49,18 +49,17 @@ class AlphaCluster:
         self.members.add(item)
         self.size += 1
         self.alpha_map[circumradius] = item
-        if circumradius in self.size_map:
-            raise IndexError("DUPLICATE circumradius!!!!!!!!!!")
         self.size_map[circumradius] = self.size
 
-    def add_child(self, cluster):
+    def add_child(self, cluster, circumradius):
         self.size += cluster.size
-        self.children.append(cluster)
+        self.children[cluster] = circumradius
+        self.size_map[circumradius] = self.size
         cluster.freeze(self)
 
-    def add_all_children(self, clusters):
+    def add_all_children(self, clusters, circumradius):
         for c in clusters:
-            self.add_child(c)
+            self.add_child(c, circumradius)
 
     def engulf(self, cluster):
         self.members |= cluster.members
@@ -69,7 +68,7 @@ class AlphaCluster:
             self.size += cluster.size
         else:
             raise RuntimeWarning("ENGULF: why is this happening? (children)")
-        self.children += cluster.children
+        self.children.update(cluster.children)
         # should extend this to updating simp_lookup
 
     def collapse(self):
@@ -117,30 +116,17 @@ class AlphaCluster:
         return self.alphas_main[-1]
 
     def width_less_than(self, alpha):
-        if not self.frozen:
-            raise RuntimeWarning("width_less_than: this is inefficient!")
-        idx = np.searchsorted(self.alphas_main, alpha, side='left')
-        if idx == 0:
+        if alpha <= self.alphas_main[0]:
             return 0
-        last_alpha = self.alphas_main[idx-1]
-        assert last_alpha <= alpha
-        if idx == len(self.alphas_main):
-            size = self.size
         else:
-            size = self.size_map[last_alpha]
-        children_in_interval = [sc for sc in self.children if last_alpha <= sc.max_alpha() < alpha]
-        # if children_in_interval:
-        #     import pdb; pdb.set_trace()
-        for sc in children_in_interval:
-            size += len(sc)
-        return size
+            return self.size_map[self.alphas_main[np.searchsorted(self.alphas_main, alpha)-1]]
 
     def get_smaller_than(self, alpha):
         # returns tuple of member indices
         #  belonging to members with CRs smaller than alpha
         member_indices = [self.alpha_map[cr] for cr in self.alphas[:np.searchsorted(self.alphas, alpha, side='right')]]
         # also get anything under this as long as the cluster is included at this alpha
-        member_indices.extend(sum((sc.get_smaller_than(alpha) for sc in self.children if sc.max_alpha() < alpha), []))
+        member_indices.extend(sum((sc.get_smaller_than(alpha) for sc in self.children if self.children[sc] < alpha), []))
         return member_indices
 
     def __repr__(self):
