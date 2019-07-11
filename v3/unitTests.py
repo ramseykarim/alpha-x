@@ -9,13 +9,14 @@ import AlphaCluster as alphac
 import pickle
 
 def get_test_data():
-    srcfile = "../../PyAlpha_drafting/test_data/Ssets/s4.txt"
+    srcfile = "../../PyAlpha_drafting/test_data/Ssets/s1.txt"
     # srcfile = "../../PyAlpha_drafting/test_data/filament5500_sampleNH2_betah1.80.dat"
     points = np.genfromtxt(srcfile)
     return points
 
 def get_my_data():
-    srcfile = "/home/ramsey/Documents/Research/Filaments/helpss/MantiPython/emcee_imgs/samples1_00.pkl"
+    # srcfile = "/home/ramsey/Documents/Research/Filaments/helpss/MantiPython/emcee_imgs/samples1_00.pkl"
+    srcfile = "/n/sgraraid/filaments/data/TEST4/helpss_scratch_work/MantiPython/emcee_imgs/samples1_00.pkl"
     with open(srcfile, 'rb') as handle:
         d = pickle.load(handle)
     return d
@@ -172,9 +173,9 @@ def test_AlphaCluster():
     Testing ground for structure of cluster code
     Uses AlphaCluster objects
     """
-    p = get_my_data()
-    print(p.shape)
-    return
+    p = get_test_data()
+    # print(p.shape)
+    # return
     # plt.plot(p[:, 0], p[:, 1], '.')
     # plt.show()
     # return
@@ -236,14 +237,16 @@ def test_AlphaCluster():
     d_ax.set_xlabel("Relative cluster size")
     d_ax.set_ylabel("Alpha")
     d_ax.set_xticklabels([])
-    surface_list, points_list = utils.naive_point_grouping(root, tri)
+    surface_list, points_list = utils.alpha_surfaces(root, tri, 2e7)
     for s in surface_list:
         surface_plotter(s)
     for points, color, opacity in points_list:
         m_ax.plot(*points, marker='.', color=color, alpha=opacity, linestyle='None', markersize=1)
-    m_ax.set_xlim([4., 16])
-    m_ax.set_ylim([21, 22])
-    m_ax.set_zlim([20, 22])
+
+    # m_ax.set_xlim([4., 16])
+    # m_ax.set_ylim([21, 22])
+    # m_ax.set_zlim([20, 22])
+
     # for setter, i in zip((m_ax.set_xlim, m_ax.set_ylim, m_ax.set_zlim), range(3)):
     #     setter(np.sort(p[:, i])[(0, -1),])
     plt.show()

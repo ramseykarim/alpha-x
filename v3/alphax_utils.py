@@ -183,10 +183,23 @@ def naive_point_grouping(root, dkey):
     return plot_surfaces, plot_points
 
 
-def alpha_surfaces(root, alpha):
+def alpha_surfaces(root, dkey, alpha):
     plot_surfaces, plot_points = [], []
-    clusters = None
-    pass # TODO: implement this
+    used_points = set()
+    stack = [root]
+    while stack:
+        a = stack.pop()
+        if a.min_alpha() <= alpha < a.max_alpha():
+            points, boundary = a.cluster_at_alpha(alpha, dkey)
+            plot_surfaces.append(generate_boundary_artist(boundary, a.get_color()))
+            used_points |= points
+            plot_points.append((tuple(zip(*points)), a.get_color(), DEFAULT_TRANSPARENCY))
+        for sc in a.children:
+            if a.children[sc] > alpha:
+                stack.append(sc)
+    leftovers = set(map(tuple, dkey.points)) - used_points
+    plot_points.append((tuple(zip(*leftovers)), 'gray', LOW_TRANSPARENCY))
+    return plot_surfaces, plot_points
 
 
 def generate_boundary_artist(vertices, color):

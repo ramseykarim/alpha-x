@@ -12,7 +12,7 @@ operation and implementation than the V2 iteration, but serves the same
 general purpose and thus retains the name.
 """
 
-MINIMUM_MEMBERSHIP = 1000
+MINIMUM_MEMBERSHIP = 300
 
 
 class AlphaCluster:
