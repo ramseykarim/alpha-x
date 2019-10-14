@@ -1,0 +1,63 @@
+author: Ramsey Karim
+v4 idea: move up in steps with fixed geometric size
+(need to define step, and cannot change it without recalculating tree)
+Use a staging area to build up small clusters (< min_size)
+When clusters are big enough, post them to the real deal
+This should (hopefully) eliminate a lot of confusing post-processing
+
+The "real deal" alpha clusters should contain a list of alpha steps
+Each list element contains simplices that JOINED *at or larger than*
+some alpha. Member simplices don't necessarily have cr's of that alpha
+(and you can look them up.)
+So each list element will be its own list of simplices and/or entire other
+alpha cluster objects. Whatever joined up in that alpha step.
+Another, same-size list will keep track of alpha values for these steps.
+
+Build proposed clusters in staging area. Build real clusters in another area.
+    Go through sorted simplex list
+    Isolated simplices get a new set() in staging area; that set becomes
+        their reference in lookup list.
+    Simplices connected to a proposed cluster get added to the set in
+        the staging area. Their lookup reference is the first simplex's index
+        (the simplex that started the set as an isolated simplex)
+    Simplices connected to real clusters get added to the real cluster
+        in the appropriate alpha step bin. Their lookup reference is the index
+        of the simplex that started the proposed cluster that became the real
+        cluster.
+    If a simplex is to be added to two proposed clusters, add the smaller
+        proposed cluster to the larger and delete the smaller from the staging
+        area. The smaller cluster's initial simplex's reference is the larger
+        cluster's reference simplex index now.
+            example: L is large, S is small. simplex from L will have L# (int)
+            as reference. S would have S#. L# and S# both would have sets as
+            references. Now, S# has L# as a reference, and L# has a set.
+            ** WE SHOULD CHECK SPEED OF DOING THIS VS OPTION 2**
+            Option 2 example: when L and S merge, go thru all S indices
+            (including S#) and change them to L#. Since below size threshold,
+            can't be that bad.
+            ** THIS MIGHT BE BETTER **
+    If a simplex is to be added to a proposed cluster and a real cluster,
+        add all elements of the proposed cluster to the real cluster as if it
+        were a number of individual simplices all in this alpha step bin.
+        For references on these simplices, follow merge protocol outlined above.
+    If a proposed cluster reaches the size threshold without joining a real
+        cluster, initiate a new real alpha cluster object with all of these
+        simplices in the current alpha step bin.
+        Change only the reference of the initial simplex to the real cluster
+        object.
+    If a simplex is to be added to two real clusters, add this simplex to the
+        larger cluster (and update reference accordingly). Add the smaller
+        cluster to the current alpha step bin of the larger cluster.
+        Assign larger cluster as the smaller cluster's parent.
+When you follow references to a real cluster, you should use the real cluster's
+    parent. This means following the parent chain all the way up somehow.
+    Isolated real simplices will have themselves as their parent.
+    The root simplex will have itself as its parent.
+Staging area: list. Contains references to sets. Don't really need this list,
+    but keeping it around for clarity/bookkeeping/debugging purposes is good.
+    The real references to the sets will be in the lookup list.
+Cluster area: list. (need a better name) Contains references to cluster objects
+    who are roots (they are their own parent).
+    Don't really need this list except to prove it only has one element left
+    at the end, the root. As clusters join other clusters, their parent is
+    updated to the other cluster and they are removed from the cluster area.
